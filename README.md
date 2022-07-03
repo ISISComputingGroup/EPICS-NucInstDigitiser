@@ -1,0 +1,1 @@
+EPICS support for Nuclear Instrument Digitsier (https://www.nuclearinstruments.eu/) used on SUPER MuSR

@@ -33,6 +33,8 @@ nidg_send_SRCS += nidg_send.cpp
 nidg_send_LIBS += zmq
 nidg_send_LIBS += $(EPICS_BASE_IOC_LIBS)
 
+nidg_send_SYS_LIBS_WIN32 += Iphlpapi
+
 #===========================
 
 include $(TOP)/configure/RULES

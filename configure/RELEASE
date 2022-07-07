@@ -67,7 +67,7 @@ ZLIB=$(SUPPORT)/zlib/master
 LIBZMQ=$(SUPPORT)/libzmq/master
 CPPZMQ = $(EPICS_KIT_ROOT)/libraries/master/cppzmq
 RAPIDJSON = $(EPICS_KIT_ROOT)/libraries/master/rapidjson
-
+FLATBUFFERS = $(SUPPORT)/flatbuffers/master
 # optional extra local definitions here
 -include $(TOP)/configure/RELEASE.private
 

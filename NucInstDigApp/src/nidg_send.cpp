@@ -1,5 +1,6 @@
 #include <string>
 #include <iostream>
+#include <exception>
 
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -8,36 +9,48 @@
 
 int main(int argc, char* argv[])
 {
+    try {
     zmq::context_t ctx{1};
     zmq::socket_t socket(ctx, zmq::socket_type::pair);
     std::string type = argv[1];
     socket.connect(argv[2]);
     rapidjson::Document doc_send;
-    rapidjson::Value arg3(argv[3] != NULL ? argv[3] : "", doc_send.GetAllocator());
+    rapidjson::Value arg3((argc > 3 ? argv[3] : ""), doc_send.GetAllocator());
     rapidjson::Value arg4;
-    rapidjson::Value arg5(argv[5] != NULL ? argv[5] : "", doc_send.GetAllocator());
+    rapidjson::Value arg5((argc > 5 ? argv[5] : ""), doc_send.GetAllocator());
     doc_send.SetObject();
-    if (type == "command")
+    if (type == "execute_cmd")
     {
         doc_send.AddMember("command", "execute_cmd", doc_send.GetAllocator());
         doc_send.AddMember("name", arg3, doc_send.GetAllocator());
-        arg4.SetString(argv[4] != NULL ? argv[4] : "", doc_send.GetAllocator());
+        arg4.SetString((argc > 4 ? argv[4] : ""), doc_send.GetAllocator());
         doc_send.AddMember("args", arg4, doc_send.GetAllocator());
     }
     else if (type == "get_parameter")
     {
         doc_send.AddMember("command", "get_parameter", doc_send.GetAllocator());
         doc_send.AddMember("name", arg3, doc_send.GetAllocator());
-        arg4.SetInt(atol(argv[4]));
+        arg4.SetInt(atol(argc > 4 ? argv[4] : "0"));
         doc_send.AddMember("idx", arg4, doc_send.GetAllocator());
     }
     else if (type == "set_parameter")
     {
         doc_send.AddMember("command", "set_parameter", doc_send.GetAllocator());
         doc_send.AddMember("name", arg3, doc_send.GetAllocator());
-        arg4.SetInt(atol(argv[4]));
+        arg4.SetInt(atol(argc > 4 ? argv[4] : "0"));
         doc_send.AddMember("idx", arg4, doc_send.GetAllocator());
         doc_send.AddMember("value", arg5, doc_send.GetAllocator());
+    }
+    else if (type == "read_data")
+    {
+        doc_send.AddMember("command", "execute_read_command", doc_send.GetAllocator());
+        doc_send.AddMember("name", arg3, doc_send.GetAllocator());
+        arg4.SetString((argc > 4 ? argv[4] : ""), doc_send.GetAllocator());
+        doc_send.AddMember("args", arg4, doc_send.GetAllocator());
+    }
+    else
+    {
+        std::cerr << "unknown command" << std::endl;
     }
 
     rapidjson::StringBuffer sb;
@@ -52,5 +65,11 @@ int main(int argc, char* argv[])
     rapidjson::Document doc_recv;
     doc_recv.Parse(reply.to_string().c_str());
     return 0;
+    }
+    catch(const std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return 1;    
+    }
 }
 

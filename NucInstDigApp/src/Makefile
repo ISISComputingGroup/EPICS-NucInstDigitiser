@@ -16,7 +16,7 @@ endif
 
 #LIBRARY_IOC += NucInstDig
 
-PROD_IOC += nidg_send
+PROD_IOC += nidg_send nidg_stream
 
 # xxxRecord.h will be created from xxxRecord.dbd
 #DBDINC += xxxRecord
@@ -32,6 +32,10 @@ NucInstDig_LIBS += $(EPICS_BASE_IOC_LIBS)
 nidg_send_SRCS += nidg_send.cpp
 nidg_send_LIBS += zmq
 nidg_send_LIBS += $(EPICS_BASE_IOC_LIBS)
+
+nidg_stream_SRCS += nidg_stream.cpp
+nidg_stream_LIBS += zmq
+nidg_stream_LIBS += $(EPICS_BASE_IOC_LIBS)
 
 #===========================
 

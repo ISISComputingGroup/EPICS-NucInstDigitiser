@@ -37,6 +37,9 @@ nidg_stream_SRCS += nidg_stream.cpp
 nidg_stream_LIBS += zmq
 nidg_stream_LIBS += $(EPICS_BASE_IOC_LIBS)
 
+nidg_send_SYS_LIBS_WIN32 += Iphlpapi
+nidg_stream_SYS_LIBS_WIN32 += Iphlpapi
+
 #===========================
 
 include $(TOP)/configure/RULES

@@ -7,22 +7,154 @@
 #include "flatbuffers/flatbuffers.h"
 
 struct StatusPacketV1;
+struct StatusPacketV1Builder;
 
-FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) StatusPacketV1 FLATBUFFERS_FINAL_CLASS {
+struct GpsTime;
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(1) GpsTime FLATBUFFERS_FINAL_CLASS {
  private:
-  uint64_t pulse_timestamp_;
+  uint8_t year_;
+  uint8_t month_;
+  uint8_t day_;
+  uint8_t hour_;
+  uint8_t minute_;
+  uint8_t second_;
+  uint8_t millisecond_;
+  uint8_t microsecond_;
+  uint8_t nanosecond_;
 
  public:
-  StatusPacketV1()
-      : pulse_timestamp_(0) {
+  GpsTime()
+      : year_(0),
+        month_(0),
+        day_(0),
+        hour_(0),
+        minute_(0),
+        second_(0),
+        millisecond_(0),
+        microsecond_(0),
+        nanosecond_(0) {
   }
-  StatusPacketV1(uint64_t _pulse_timestamp)
-      : pulse_timestamp_(flatbuffers::EndianScalar(_pulse_timestamp)) {
+  GpsTime(uint8_t _year, uint8_t _month, uint8_t _day, uint8_t _hour, uint8_t _minute, uint8_t _second, uint8_t _millisecond, uint8_t _microsecond, uint8_t _nanosecond)
+      : year_(flatbuffers::EndianScalar(_year)),
+        month_(flatbuffers::EndianScalar(_month)),
+        day_(flatbuffers::EndianScalar(_day)),
+        hour_(flatbuffers::EndianScalar(_hour)),
+        minute_(flatbuffers::EndianScalar(_minute)),
+        second_(flatbuffers::EndianScalar(_second)),
+        millisecond_(flatbuffers::EndianScalar(_millisecond)),
+        microsecond_(flatbuffers::EndianScalar(_microsecond)),
+        nanosecond_(flatbuffers::EndianScalar(_nanosecond)) {
   }
-  uint64_t pulse_timestamp() const {
-    return flatbuffers::EndianScalar(pulse_timestamp_);
+  uint8_t year() const {
+    return flatbuffers::EndianScalar(year_);
+  }
+  uint8_t month() const {
+    return flatbuffers::EndianScalar(month_);
+  }
+  uint8_t day() const {
+    return flatbuffers::EndianScalar(day_);
+  }
+  uint8_t hour() const {
+    return flatbuffers::EndianScalar(hour_);
+  }
+  uint8_t minute() const {
+    return flatbuffers::EndianScalar(minute_);
+  }
+  uint8_t second() const {
+    return flatbuffers::EndianScalar(second_);
+  }
+  uint8_t millisecond() const {
+    return flatbuffers::EndianScalar(millisecond_);
+  }
+  uint8_t microsecond() const {
+    return flatbuffers::EndianScalar(microsecond_);
+  }
+  uint8_t nanosecond() const {
+    return flatbuffers::EndianScalar(nanosecond_);
   }
 };
-FLATBUFFERS_STRUCT_END(StatusPacketV1, 8);
+FLATBUFFERS_STRUCT_END(GpsTime, 9);
+
+struct StatusPacketV1 FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef StatusPacketV1Builder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_TIMESTAMP = 4,
+    VT_PERIOD_NUMBER = 6,
+    VT_PROTONS_PER_PULSE = 8,
+    VT_RUNNING = 10,
+    VT_FRAME_NUMBER = 12
+  };
+  const GpsTime *timestamp() const {
+    return GetStruct<const GpsTime *>(VT_TIMESTAMP);
+  }
+  uint64_t period_number() const {
+    return GetField<uint64_t>(VT_PERIOD_NUMBER, 0);
+  }
+  uint8_t protons_per_pulse() const {
+    return GetField<uint8_t>(VT_PROTONS_PER_PULSE, 0);
+  }
+  bool running() const {
+    return GetField<uint8_t>(VT_RUNNING, 0) != 0;
+  }
+  uint32_t frame_number() const {
+    return GetField<uint32_t>(VT_FRAME_NUMBER, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<GpsTime>(verifier, VT_TIMESTAMP, 1) &&
+           VerifyField<uint64_t>(verifier, VT_PERIOD_NUMBER, 8) &&
+           VerifyField<uint8_t>(verifier, VT_PROTONS_PER_PULSE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_RUNNING, 1) &&
+           VerifyField<uint32_t>(verifier, VT_FRAME_NUMBER, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct StatusPacketV1Builder {
+  typedef StatusPacketV1 Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_timestamp(const GpsTime *timestamp) {
+    fbb_.AddStruct(StatusPacketV1::VT_TIMESTAMP, timestamp);
+  }
+  void add_period_number(uint64_t period_number) {
+    fbb_.AddElement<uint64_t>(StatusPacketV1::VT_PERIOD_NUMBER, period_number, 0);
+  }
+  void add_protons_per_pulse(uint8_t protons_per_pulse) {
+    fbb_.AddElement<uint8_t>(StatusPacketV1::VT_PROTONS_PER_PULSE, protons_per_pulse, 0);
+  }
+  void add_running(bool running) {
+    fbb_.AddElement<uint8_t>(StatusPacketV1::VT_RUNNING, static_cast<uint8_t>(running), 0);
+  }
+  void add_frame_number(uint32_t frame_number) {
+    fbb_.AddElement<uint32_t>(StatusPacketV1::VT_FRAME_NUMBER, frame_number, 0);
+  }
+  explicit StatusPacketV1Builder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  flatbuffers::Offset<StatusPacketV1> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<StatusPacketV1>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<StatusPacketV1> CreateStatusPacketV1(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    const GpsTime *timestamp = nullptr,
+    uint64_t period_number = 0,
+    uint8_t protons_per_pulse = 0,
+    bool running = false,
+    uint32_t frame_number = 0) {
+  StatusPacketV1Builder builder_(_fbb);
+  builder_.add_period_number(period_number);
+  builder_.add_frame_number(frame_number);
+  builder_.add_timestamp(timestamp);
+  builder_.add_running(running);
+  builder_.add_protons_per_pulse(protons_per_pulse);
+  return builder_.Finish();
+}
 
 #endif  // FLATBUFFERS_GENERATED_STATUSPACKETV1_H_

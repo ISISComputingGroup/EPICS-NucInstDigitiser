@@ -80,12 +80,16 @@ inline flatbuffers::Offset<ChannelTrace> CreateChannelTraceDirect(
 struct DigitizerAnalogTraceMessage FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef DigitizerAnalogTraceMessageBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_STATUS = 4,
-    VT_SAMPLE_RATE = 6,
-    VT_CHANNELS = 8
+    VT_DIGITIZER_ID = 4,
+    VT_STATUS = 6,
+    VT_SAMPLE_RATE = 8,
+    VT_CHANNELS = 10
   };
+  uint8_t digitizer_id() const {
+    return GetField<uint8_t>(VT_DIGITIZER_ID, 0);
+  }
   const StatusPacketV1 *status() const {
-    return GetStruct<const StatusPacketV1 *>(VT_STATUS);
+    return GetPointer<const StatusPacketV1 *>(VT_STATUS);
   }
   uint64_t sample_rate() const {
     return GetField<uint64_t>(VT_SAMPLE_RATE, 0);
@@ -95,7 +99,9 @@ struct DigitizerAnalogTraceMessage FLATBUFFERS_FINAL_CLASS : private flatbuffers
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyFieldRequired<StatusPacketV1>(verifier, VT_STATUS, 8) &&
+           VerifyField<uint8_t>(verifier, VT_DIGITIZER_ID, 1) &&
+           VerifyOffsetRequired(verifier, VT_STATUS) &&
+           verifier.VerifyTable(status()) &&
            VerifyField<uint64_t>(verifier, VT_SAMPLE_RATE, 8) &&
            VerifyOffset(verifier, VT_CHANNELS) &&
            verifier.VerifyVector(channels()) &&
@@ -108,8 +114,11 @@ struct DigitizerAnalogTraceMessageBuilder {
   typedef DigitizerAnalogTraceMessage Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_status(const StatusPacketV1 *status) {
-    fbb_.AddStruct(DigitizerAnalogTraceMessage::VT_STATUS, status);
+  void add_digitizer_id(uint8_t digitizer_id) {
+    fbb_.AddElement<uint8_t>(DigitizerAnalogTraceMessage::VT_DIGITIZER_ID, digitizer_id, 0);
+  }
+  void add_status(flatbuffers::Offset<StatusPacketV1> status) {
+    fbb_.AddOffset(DigitizerAnalogTraceMessage::VT_STATUS, status);
   }
   void add_sample_rate(uint64_t sample_rate) {
     fbb_.AddElement<uint64_t>(DigitizerAnalogTraceMessage::VT_SAMPLE_RATE, sample_rate, 0);
@@ -131,24 +140,28 @@ struct DigitizerAnalogTraceMessageBuilder {
 
 inline flatbuffers::Offset<DigitizerAnalogTraceMessage> CreateDigitizerAnalogTraceMessage(
     flatbuffers::FlatBufferBuilder &_fbb,
-    const StatusPacketV1 *status = nullptr,
+    uint8_t digitizer_id = 0,
+    flatbuffers::Offset<StatusPacketV1> status = 0,
     uint64_t sample_rate = 0,
     flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<ChannelTrace>>> channels = 0) {
   DigitizerAnalogTraceMessageBuilder builder_(_fbb);
   builder_.add_sample_rate(sample_rate);
   builder_.add_channels(channels);
   builder_.add_status(status);
+  builder_.add_digitizer_id(digitizer_id);
   return builder_.Finish();
 }
 
 inline flatbuffers::Offset<DigitizerAnalogTraceMessage> CreateDigitizerAnalogTraceMessageDirect(
     flatbuffers::FlatBufferBuilder &_fbb,
-    const StatusPacketV1 *status = nullptr,
+    uint8_t digitizer_id = 0,
+    flatbuffers::Offset<StatusPacketV1> status = 0,
     uint64_t sample_rate = 0,
     const std::vector<flatbuffers::Offset<ChannelTrace>> *channels = nullptr) {
   auto channels__ = channels ? _fbb.CreateVector<flatbuffers::Offset<ChannelTrace>>(*channels) : 0;
   return CreateDigitizerAnalogTraceMessage(
       _fbb,
+      digitizer_id,
       status,
       sample_rate,
       channels__);

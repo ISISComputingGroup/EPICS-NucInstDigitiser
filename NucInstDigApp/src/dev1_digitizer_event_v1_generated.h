@@ -14,13 +14,17 @@ struct DigitizerEventListMessageBuilder;
 struct DigitizerEventListMessage FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef DigitizerEventListMessageBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_STATUS = 4,
-    VT_TIME = 6,
-    VT_VOLTAGE = 8,
-    VT_CHANNEL = 10
+    VT_DIGITIZER_ID = 4,
+    VT_STATUS = 6,
+    VT_TIME = 8,
+    VT_VOLTAGE = 10,
+    VT_CHANNEL = 12
   };
+  uint8_t digitizer_id() const {
+    return GetField<uint8_t>(VT_DIGITIZER_ID, 0);
+  }
   const StatusPacketV1 *status() const {
-    return GetStruct<const StatusPacketV1 *>(VT_STATUS);
+    return GetPointer<const StatusPacketV1 *>(VT_STATUS);
   }
   const flatbuffers::Vector<uint32_t> *time() const {
     return GetPointer<const flatbuffers::Vector<uint32_t> *>(VT_TIME);
@@ -33,7 +37,9 @@ struct DigitizerEventListMessage FLATBUFFERS_FINAL_CLASS : private flatbuffers::
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyFieldRequired<StatusPacketV1>(verifier, VT_STATUS, 8) &&
+           VerifyField<uint8_t>(verifier, VT_DIGITIZER_ID, 1) &&
+           VerifyOffsetRequired(verifier, VT_STATUS) &&
+           verifier.VerifyTable(status()) &&
            VerifyOffset(verifier, VT_TIME) &&
            verifier.VerifyVector(time()) &&
            VerifyOffset(verifier, VT_VOLTAGE) &&
@@ -48,8 +54,11 @@ struct DigitizerEventListMessageBuilder {
   typedef DigitizerEventListMessage Table;
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_status(const StatusPacketV1 *status) {
-    fbb_.AddStruct(DigitizerEventListMessage::VT_STATUS, status);
+  void add_digitizer_id(uint8_t digitizer_id) {
+    fbb_.AddElement<uint8_t>(DigitizerEventListMessage::VT_DIGITIZER_ID, digitizer_id, 0);
+  }
+  void add_status(flatbuffers::Offset<StatusPacketV1> status) {
+    fbb_.AddOffset(DigitizerEventListMessage::VT_STATUS, status);
   }
   void add_time(flatbuffers::Offset<flatbuffers::Vector<uint32_t>> time) {
     fbb_.AddOffset(DigitizerEventListMessage::VT_TIME, time);
@@ -74,7 +83,8 @@ struct DigitizerEventListMessageBuilder {
 
 inline flatbuffers::Offset<DigitizerEventListMessage> CreateDigitizerEventListMessage(
     flatbuffers::FlatBufferBuilder &_fbb,
-    const StatusPacketV1 *status = nullptr,
+    uint8_t digitizer_id = 0,
+    flatbuffers::Offset<StatusPacketV1> status = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint32_t>> time = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint16_t>> voltage = 0,
     flatbuffers::Offset<flatbuffers::Vector<uint32_t>> channel = 0) {
@@ -83,12 +93,14 @@ inline flatbuffers::Offset<DigitizerEventListMessage> CreateDigitizerEventListMe
   builder_.add_voltage(voltage);
   builder_.add_time(time);
   builder_.add_status(status);
+  builder_.add_digitizer_id(digitizer_id);
   return builder_.Finish();
 }
 
 inline flatbuffers::Offset<DigitizerEventListMessage> CreateDigitizerEventListMessageDirect(
     flatbuffers::FlatBufferBuilder &_fbb,
-    const StatusPacketV1 *status = nullptr,
+    uint8_t digitizer_id = 0,
+    flatbuffers::Offset<StatusPacketV1> status = 0,
     const std::vector<uint32_t> *time = nullptr,
     const std::vector<uint16_t> *voltage = nullptr,
     const std::vector<uint32_t> *channel = nullptr) {
@@ -97,6 +109,7 @@ inline flatbuffers::Offset<DigitizerEventListMessage> CreateDigitizerEventListMe
   auto channel__ = channel ? _fbb.CreateVector<uint32_t>(*channel) : 0;
   return CreateDigitizerEventListMessage(
       _fbb,
+      digitizer_id,
       status,
       time__,
       voltage__,

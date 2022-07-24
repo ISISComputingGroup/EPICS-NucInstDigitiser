@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
 {
     try {
     zmq::context_t ctx{1};
-    zmq::socket_t socket(ctx, zmq::socket_type::pair);
+    zmq::socket_t socket(ctx, zmq::socket_type::req);
     std::string type = argv[1];
     socket.connect(argv[2]);
     rapidjson::Document doc_send;

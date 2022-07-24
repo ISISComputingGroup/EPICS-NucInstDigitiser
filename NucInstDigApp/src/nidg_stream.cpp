@@ -1,3 +1,4 @@
+#include <windows.h>
 #include <string>
 #include <iostream>
 
@@ -21,9 +22,14 @@ int main(int argc, char* argv[])
     auto channels = msg->channels();
     for(int i=0; i<channels->size(); ++i) {
         std::cerr << "chan " << (channels->Get(i)->channel()) << std::endl;
-        std::cerr << "voltages " << channels->Get(i)->voltage()->size() << std::endl;
+        std::cerr << "n voltages " << channels->Get(i)->voltage()->size() << std::endl;
+        for(int j=0; j<1000; ++j)
+        {
+            std::cerr << channels->Get(i)->voltage()->Get(j) << " ";
+        }
+        std::cerr << std::endl;
     }
-    std::cerr << "timestamp " << msg->status()->pulse_timestamp() << std::endl;
+    std::cerr << "timestamp " << msg->status()->timestamp() << std::endl;
     }
     return 0;
 }

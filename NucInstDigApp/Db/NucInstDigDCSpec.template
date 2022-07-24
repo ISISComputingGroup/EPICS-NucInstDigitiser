@@ -1,0 +1,26 @@
+record(waveform, "$(P)$(Q)DCSPEC$(N):X")
+{
+    field(DESC, "Spectrum Numbers")
+    field(NELM, "20000")
+    field(FTVL, "DOUBLE")
+    field(DTYP, "asynFloat64ArrayIn")
+    field(INP,  "@asyn($(PORT),0,0)DCSPEC$(N)X")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(Q)DCSPEC$(N):Y")
+{
+    field(DESC, "Spectrum Numbers")
+    field(NELM, "20000")
+    field(FTVL, "DOUBLE")
+    field(DTYP, "asynFloat64ArrayIn")
+    field(INP,  "@asyn($(PORT),0,0)DCSPEC$(N)Y")
+    field(SCAN, "I/O Intr")
+}
+
+record(longout, "$(P)$(Q)DCSPEC$(N):IDX")
+{
+    field(DESC, "Spectrum Numbers")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)DCSPEC$(N)IDX")
+}

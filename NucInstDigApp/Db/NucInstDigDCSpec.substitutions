@@ -1,0 +1,9 @@
+global { "P=\$(P)", "Q=\$(Q)" }
+
+file "NucInstDigDCSpec.template" {
+    pattern { N }
+    { "1" }
+    { "2" }
+    { "3" }
+    { "4" }
+}

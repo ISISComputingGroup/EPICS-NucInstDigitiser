@@ -5,6 +5,7 @@
 #include <math.h>
 #include <exception>
 #include <iostream>
+#include <strstream>
 #include <map>
 #include <vector>
 #include <iomanip>
@@ -67,6 +68,7 @@ asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 
 asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
+    try {
 	int function = pasynUser->reason;
 	if (function < FIRST_NUCINSTDIG_PARAM)
 	{
@@ -74,7 +76,21 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
 	}
 	asynStatus stat = asynSuccess;
     if (function == P_startAcquisition) {
-        execute("execute_cmd", "start_acquisition", "", "");
+        executeCmd("start_acquisition", "");
+    }
+    else if (function == P_stopAcquisition) {
+        executeCmd("stop_acquisition", "");
+    }
+    else if (function == P_resetDCSpectra) {
+        executeCmd("reset_darkcount_spectra", "");
+    }
+    else if (function >= P_DCSpecIdx[0] && function <= P_DCSpecIdx[3]) {
+        int idx = function - P_DCSpecIdx[0];
+        m_DCSpecIdx[idx] = value;
+    }
+    else if (function >= P_traceIdx[0] && function <= P_traceIdx[3]) {
+        int idx = function - P_traceIdx[0];
+        m_traceIdx[idx] = value;
     }
 	if (stat == asynSuccess)
 	{
@@ -85,6 +101,12 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
 		callParamCallbacks(); // this flushes P_ErrMsgs
 	}
 	return stat;
+    }
+    catch(const std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return asynError;
+    }
 }
 
 asynStatus NucInstDig::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value, size_t nElements, size_t *nIn)
@@ -259,31 +281,182 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
 
 void NucInstDig::updateTraces()
 {
+    epicsTimeStamp last_update, now;
+    epicsTimeGetCurrent(&last_update);
     while(true)
     {
+        try {
         zmq::message_t reply{};
         m_zmq_stream_socket.recv(reply, zmq::recv_flags::none);
         auto msg = GetDigitizerAnalogTraceMessage(reply.data());
-        auto channels = msg->channels();    
+        auto channels = msg->channels();
         for(int i=0; i<channels->size(); ++i) {
             int chan = channels->Get(i)->channel();
-            if (chan == 0) {
-            int nvoltage = channels->Get(i)->voltage()->size();
-            m_traceX.resize(nvoltage);
-            m_traceY.resize(nvoltage);
-            for(int j=0; j<nvoltage; ++j) {
-                m_traceX[j] = j;
-                m_traceY[j] = channels->Get(i)->voltage()->Get(j);
-            }
+            for(size_t j=0; j<4; ++j) {
+                if (chan == m_traceIdx[j]) {
+                    int nvoltage = channels->Get(i)->voltage()->size();
+                    m_traceX[j].resize(nvoltage);
+                    m_traceY[j].resize(nvoltage);
+                    for(int k=0; k<nvoltage; ++k) {
+                        m_traceX[j][k] = k;
+                        m_traceY[j][k] = channels->Get(i)->voltage()->Get(k);
+                    }
+                }
             }
         }
-        doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(&(m_traceX[0])), m_traceX.size(), P_traceX, 0);
-        doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(&(m_traceY[0])), m_traceY.size(), P_traceY, 0);
-//    std::cerr << "timestamp " << msg->status()->timestamp() << std::endl;
+        epicsTimeGetCurrent(&now);
+        if (epicsTimeDiffInSeconds(&now, &last_update) > 0.5)
+        {
+            lock();
+            for(size_t j=0; j<4; ++j) {
+                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceX[j].data()), m_traceX[j].size(), P_traceX[j], 0);
+                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceY[j].data()), m_traceY[j].size(), P_traceY[j], 0);
+            }
+            unlock();
+            last_update = now;
+        }
+        }
+        catch(const std::exception& ex)
+        {
+            std::cerr << ex.what() << std::endl;
+            epicsThreadSleep(3.0);            
+        }
     }
 }
     
-void NucInstDig::execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2)
+void NucInstDig::updateDCSpectra()
+{
+    Vector2D dcSpectra;
+    while(true)
+    {
+        int read_spectra = 0;
+        epicsThreadSleep(1.0);
+        lock();
+        getIntegerParam(P_readDCSpectra, &read_spectra);
+        unlock();
+        if (read_spectra == 0) {
+            continue;
+        }
+        try {
+        readData2d("get_darkcount_spectra", "", dcSpectra);
+        for(size_t j=0; j<4; ++j) {
+            int idx = m_DCSpecIdx[j];
+            if (idx >= 0 && idx < dcSpectra.size()) {
+                int npts = dcSpectra[idx].size();
+                m_DCSpecX[j].resize(npts);
+                m_DCSpecY[j].resize(npts);
+                for(int k=0; k<npts; ++k) {
+                    m_DCSpecX[j][k] = k;
+                    m_DCSpecY[j][k] = dcSpectra[idx][k];
+                }
+                lock();
+                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecX[j].data()), m_DCSpecX[j].size(), P_DCSpecX[j], 0);
+                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecY[j].data()), m_DCSpecY[j].size(), P_DCSpecY[j], 0);
+                unlock();
+            }
+        }
+        }
+        catch(const std::exception& ex)
+        {
+            std::cerr << ex.what() << std::endl;
+            epicsThreadSleep(3.0);            
+        }
+    }
+}
+    
+
+
+void NucInstDig::updateEvents()
+{
+    while(true)
+    {
+        try {
+        zmq::message_t reply{};
+        m_zmq_events_socket.recv(reply, zmq::recv_flags::none);
+        auto msg = GetDigitizerEventListMessage(reply.data());
+        auto channels = msg->channel();
+        auto times = msg->time();
+        auto voltages = msg->voltage();
+        size_t nevents = channels->size();
+        std::cerr << "nevents " << nevents << std::endl;
+        if (nevents > 5) {
+            nevents = 5;
+        }
+        for(size_t i=0; i<nevents; ++i) {
+            std::cerr << channels->Get(i) << " " << times->Get(i) << " " << voltages->Get(i) << std::endl;
+        }
+        }
+        catch(const std::exception& ex)
+        {
+            std::cerr << ex.what() << std::endl;
+            epicsThreadSleep(3.0);            
+        }
+
+        
+    }
+}
+
+void NucInstDig::executeCmd(const std::string& name, const std::string& args)
+{
+    rapidjson::Document doc_recv;
+    execute("execute_cmd", name, args, "", doc_recv);    
+}
+
+void NucInstDig::readData2d(const std::string& name, const std::string& args, Vector2D& dataOut)
+{
+    rapidjson::Document doc_recv;
+    execute("execute_read_command", name, args, "", doc_recv);
+    const rapidjson::Value& data = doc_recv["data"];
+    if (data.IsArray())
+    {
+        dataOut.resize(data.Size());
+        for (rapidjson::SizeType i = 0; i < data.Size(); ++i)
+        {
+            const rapidjson::Value& spec = data[i];
+            dataOut[i].resize(spec.Size());
+            for (rapidjson::SizeType j = 0; j < spec.Size(); ++j)
+            {
+                dataOut[i][j] = spec[j].GetDouble();
+            }
+        }
+    }
+}
+
+void NucInstDig::getParameter(const std::string& name, int idx)
+{
+    char idxStr[16];
+    rapidjson::Document doc_recv;
+    sprintf(idxStr, "%d", idx);
+    execute("get_parameter", name, idxStr, "", doc_recv);    
+}
+
+void NucInstDig::setParameter(const std::string& name, const std::string& value, int idx)
+{
+    char idxStr[16];
+    rapidjson::Document doc_recv;
+    sprintf(idxStr, "%d", idx);
+    execute("set_parameter", name, value, idxStr, doc_recv);    
+}
+
+void NucInstDig::setParameter(const std::string& name, double value, int idx)
+{
+    char idxStr[16], valueStr[16];
+    rapidjson::Document doc_recv;
+    sprintf(idxStr, "%d", idx);
+    sprintf(valueStr, "%f", value);
+    execute("set_parameter", name, valueStr, idxStr, doc_recv);
+}
+
+void NucInstDig::setParameter(const std::string& name, int value, int idx)
+{
+    char idxStr[16], valueStr[16];
+    rapidjson::Document doc_recv;
+    sprintf(idxStr, "%d", idx);
+    sprintf(valueStr, "%d", value);
+    execute("set_parameter", name, valueStr, idxStr, doc_recv);
+}
+
+void NucInstDig::execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2, rapidjson::Document& doc_recv)
 {    
     rapidjson::Document doc_send;
     rapidjson::Value arg1v, arg2v;
@@ -309,30 +482,43 @@ void NucInstDig::execute(const std::string& type, const std::string& name, const
         doc_send.AddMember("idx", arg1v, doc_send.GetAllocator());
         doc_send.AddMember("value", arg2v, doc_send.GetAllocator());
     }
-    else if (type == "read_data")
+    else if (type == "execute_read_command")
     {
         arg1v.SetString(arg1.c_str(), doc_send.GetAllocator());
         doc_send.AddMember("args", arg1v, doc_send.GetAllocator());
     }
     else
     {
-        std::cerr << "unknown command" << std::endl;
+        throw std::runtime_error("unknown command");
     }
 
     rapidjson::StringBuffer sb;
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
     doc_send.Accept(writer);
     std::string sendstr = sb.GetString();
-    std::cout << "Sending " << sendstr << std::endl;
+//    std::cout << "Sending " << sendstr << std::endl;
     m_zmq_cmd_socket.send(zmq::buffer(sendstr), zmq::send_flags::none);
     zmq::message_t reply{};
     m_zmq_cmd_socket.recv(reply, zmq::recv_flags::none);
-    std::cout << "Received " << reply.to_string() << std::endl;
-    rapidjson::Document doc_recv;
+//    std::cout << "Received " << reply.to_string() << std::endl;
     doc_recv.Parse(reply.to_string().c_str());
+    if (doc_recv["response"] != "ok")
+    {
+        std::ostrstream oss;
+        oss << "Sent " << sendstr << " Error: code=" << doc_recv["error_code"].GetInt() << " message=" << doc_recv["message"].GetString();
+        throw std::runtime_error(oss.str());
+    }
 }
 
-
+void NucInstDig::createNParams(const char* name, asynParamType type, int* param, int n)
+{
+    char buffer[256]; 
+    for(int i=0; i<n; ++i)
+    {
+        sprintf(buffer, name, i+1); 
+        createParam(buffer, type, &(param[i]));
+    }
+}
 
 /// Constructor for the isisdaeDriver class.
 /// Calls constructor for the asynPortDriver base class.
@@ -349,20 +535,25 @@ NucInstDig::NucInstDig(const char *portName, const char * targetAddress)
                     0, /* Default priority */
                     0),	/* Default stack size*/
 					 m_pRaw(NULL),
+                     m_zmq_events_ctx{1}, m_zmq_events_socket(m_zmq_events_ctx, zmq::socket_type::pull),
                      m_zmq_cmd_ctx{1}, m_zmq_cmd_socket(m_zmq_cmd_ctx, zmq::socket_type::req),
                      m_zmq_stream_ctx{1}, m_zmq_stream_socket(m_zmq_stream_ctx, zmq::socket_type::pull)
 {					
     const char *functionName = "NucInstDig";
     
+    m_zmq_events_socket.connect(std::string("tcp://") + targetAddress + ":5555");
     m_zmq_cmd_socket.connect(std::string("tcp://") + targetAddress + ":5557");
     m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
-    createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition);
-    createParam(P_specNumString, asynParamInt32, &P_specNum);
-    createParam(P_traceNumString, asynParamInt32, &P_traceNum);
-    createParam(P_specXString, asynParamFloat64Array, &P_specX);
-    createParam(P_specYString, asynParamFloat64Array, &P_specY);
-    createParam(P_traceXString, asynParamFloat64Array, &P_traceX);
-    createParam(P_traceYString, asynParamFloat64Array, &P_traceY);
+    createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition); // must be first
+    createParam(P_stopAcquisitionString, asynParamInt32, &P_stopAcquisition);
+    createNParams(P_DCSpecXString, asynParamFloat64Array, P_DCSpecX, 4);
+    createNParams(P_DCSpecYString, asynParamFloat64Array, P_DCSpecY, 4);
+    createNParams(P_DCSpecIdxString, asynParamInt32, P_DCSpecIdx, 4);
+    createNParams(P_traceXString, asynParamFloat64Array, P_traceX, 4);
+    createNParams(P_traceYString, asynParamFloat64Array, P_traceY, 4);
+    createNParams(P_traceIdxString, asynParamInt32, P_traceIdx, 4);
+    createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
+    createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
 
     // Create the thread for background tasks (not used at present, could be used for I/O intr scanning) 
     if (epicsThreadCreate("isisdaePoller1",
@@ -377,6 +568,22 @@ NucInstDig::NucInstDig(const char *portName, const char * targetAddress)
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
                           (EPICSTHREADFUNC)pollerThreadC2, this) == 0)
+    {
+        printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
+        return;
+    }
+    if (epicsThreadCreate("isisdaePoller3",
+                          epicsThreadPriorityMedium,
+                          epicsThreadGetStackSize(epicsThreadStackMedium),
+                          (EPICSTHREADFUNC)pollerThreadC3, this) == 0)
+    {
+        printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
+        return;
+    }
+    if (epicsThreadCreate("isisdaePoller4",
+                          epicsThreadPriorityMedium,
+                          epicsThreadGetStackSize(epicsThreadStackMedium),
+                          (EPICSTHREADFUNC)pollerThreadC4, this) == 0)
     {
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
@@ -401,6 +608,24 @@ void NucInstDig::pollerThreadC2(void* arg)
 	}
 }
 
+void NucInstDig::pollerThreadC3(void* arg)
+{
+    NucInstDig* driver = (NucInstDig*)arg;
+	if (driver != NULL)
+	{
+	    driver->pollerThread3();
+	}
+}
+
+void NucInstDig::pollerThreadC4(void* arg)
+{
+    NucInstDig* driver = (NucInstDig*)arg;
+	if (driver != NULL)
+	{
+	    driver->pollerThread4();
+	}
+}
+
 void NucInstDig::pollerThread1()
 {
     static const char* functionName = "isisdaePoller1";
@@ -411,6 +636,18 @@ void NucInstDig::pollerThread2()
 {
     static const char* functionName = "isisdaePoller1";
     updateTraces();
+}
+
+void NucInstDig::pollerThread3()
+{
+    static const char* functionName = "isisdaePoller1";
+    updateEvents();
+}
+
+void NucInstDig::pollerThread4()
+{
+    static const char* functionName = "isisdaePoller1";
+    updateDCSpectra();
 }
 
 /** Report status of the driver.

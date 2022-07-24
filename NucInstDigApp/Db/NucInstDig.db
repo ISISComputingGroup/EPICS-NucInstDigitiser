@@ -1,45 +1,25 @@
-record(waveform, "$(P)$(Q)TRACEX")
-{
-    field(DESC, "Spectrum Numbers")
-    field(NELM, "20000")
-    field(FTVL, "DOUBLE")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),0,0)TRACEX")
-    field(SCAN, "I/O Intr")
-}
-
-record(waveform, "$(P)$(Q)TRACEY")
-{
-    field(DESC, "Spectrum Numbers")
-    field(NELM, "20000")
-    field(FTVL, "DOUBLE")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),0,0)TRACEY")
-    field(SCAN, "I/O Intr")
-}
-
-record(waveform, "$(P)$(Q)SPECX")
-{
-    field(DESC, "Spectrum Numbers")
-    field(NELM, "20000")
-    field(FTVL, "DOUBLE")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),0,0)SPECX")
-    field(SCAN, "I/O Intr")
-}
-
-record(waveform, "$(P)$(Q)SPECY")
-{
-    field(DESC, "Spectrum Numbers")
-    field(NELM, "20000")
-    field(FTVL, "DOUBLE")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),0,0)SPECY")
-    field(SCAN, "I/O Intr")
-}
-
 record(bo, "$(P)$(Q)START")
 {
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),0,0)START")
+}
+
+record(bo, "$(P)$(Q)STOP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)STOP")
+}
+
+record(bo, "$(P)$(Q)RESET_DC_SPECTRA")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)RESET_DC_SPECTRA")
+}
+
+record(bo, "$(P)$(Q)READ_DC_SPECTRA")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)READ_DC_SPECTRA")
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
 }

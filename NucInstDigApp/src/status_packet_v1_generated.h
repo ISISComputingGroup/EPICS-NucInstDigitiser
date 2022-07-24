@@ -11,7 +11,7 @@ struct StatusPacketV1Builder;
 
 struct GpsTime;
 
-FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(1) GpsTime FLATBUFFERS_FINAL_CLASS {
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(2) GpsTime FLATBUFFERS_FINAL_CLASS {
  private:
   uint8_t year_;
   uint8_t month_;
@@ -19,9 +19,9 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(1) GpsTime FLATBUFFERS_FINAL_CLASS {
   uint8_t hour_;
   uint8_t minute_;
   uint8_t second_;
-  uint8_t millisecond_;
-  uint8_t microsecond_;
-  uint8_t nanosecond_;
+  uint16_t millisecond_;
+  uint16_t microsecond_;
+  uint16_t nanosecond_;
 
  public:
   GpsTime()
@@ -35,7 +35,7 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(1) GpsTime FLATBUFFERS_FINAL_CLASS {
         microsecond_(0),
         nanosecond_(0) {
   }
-  GpsTime(uint8_t _year, uint8_t _month, uint8_t _day, uint8_t _hour, uint8_t _minute, uint8_t _second, uint8_t _millisecond, uint8_t _microsecond, uint8_t _nanosecond)
+  GpsTime(uint8_t _year, uint8_t _month, uint8_t _day, uint8_t _hour, uint8_t _minute, uint8_t _second, uint16_t _millisecond, uint16_t _microsecond, uint16_t _nanosecond)
       : year_(flatbuffers::EndianScalar(_year)),
         month_(flatbuffers::EndianScalar(_month)),
         day_(flatbuffers::EndianScalar(_day)),
@@ -64,17 +64,17 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(1) GpsTime FLATBUFFERS_FINAL_CLASS {
   uint8_t second() const {
     return flatbuffers::EndianScalar(second_);
   }
-  uint8_t millisecond() const {
+  uint16_t millisecond() const {
     return flatbuffers::EndianScalar(millisecond_);
   }
-  uint8_t microsecond() const {
+  uint16_t microsecond() const {
     return flatbuffers::EndianScalar(microsecond_);
   }
-  uint8_t nanosecond() const {
+  uint16_t nanosecond() const {
     return flatbuffers::EndianScalar(nanosecond_);
   }
 };
-FLATBUFFERS_STRUCT_END(GpsTime, 9);
+FLATBUFFERS_STRUCT_END(GpsTime, 12);
 
 struct StatusPacketV1 FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef StatusPacketV1Builder Builder;
@@ -102,7 +102,7 @@ struct StatusPacketV1 FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<GpsTime>(verifier, VT_TIMESTAMP, 1) &&
+           VerifyField<GpsTime>(verifier, VT_TIMESTAMP, 2) &&
            VerifyField<uint64_t>(verifier, VT_PERIOD_NUMBER, 8) &&
            VerifyField<uint8_t>(verifier, VT_PROTONS_PER_PULSE, 1) &&
            VerifyField<uint8_t>(verifier, VT_RUNNING, 1) &&

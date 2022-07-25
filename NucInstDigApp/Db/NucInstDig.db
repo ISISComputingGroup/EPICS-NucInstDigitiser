@@ -23,3 +23,11 @@ record(bo, "$(P)$(Q)READ_DC_SPECTRA")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 }
+
+record(bo, "$(P)$(Q)READ_EVENTS")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)READ_EVENTS")
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+}

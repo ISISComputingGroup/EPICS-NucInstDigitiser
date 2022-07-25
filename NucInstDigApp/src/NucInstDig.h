@@ -45,6 +45,7 @@ private:
     int P_traceY[4]; // realarray
     int P_traceIdx[4]; // int
     int P_readDCSpectra; // int
+    int P_readEvents; // int
     int P_resetDCSpectra; // int
     
 	#define FIRST_NUCINSTDIG_PARAM P_startAcquisition
@@ -81,6 +82,7 @@ private:
 #define P_stopAcquisitionString	    "STOP"
 #define P_resetDCSpectraString	    "RESET_DC_SPECTRA"
 #define P_readDCSpectraString	    "READ_DC_SPECTRA"
+#define P_readEventsString          "READ_EVENTS"
 #define P_DCSpecXString             "DCSPEC%dX"
 #define P_DCSpecYString             "DCSPEC%dY"
 #define P_DCSpecIdxString           "DCSPEC%dIDX"

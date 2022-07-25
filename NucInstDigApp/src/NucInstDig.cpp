@@ -364,12 +364,18 @@ void NucInstDig::updateDCSpectra()
     }
 }
     
-
-
 void NucInstDig::updateEvents()
 {
     while(true)
     {
+        int read_events = 0;
+        epicsThreadSleep(1.0);
+        lock();
+        getIntegerParam(P_readEvents, &read_events);
+        unlock();
+        if (read_events == 0) {
+            continue;
+        }
         try {
         zmq::message_t reply{};
         m_zmq_events_socket.recv(reply, zmq::recv_flags::none);
@@ -553,6 +559,7 @@ NucInstDig::NucInstDig(const char *portName, const char * targetAddress)
     createNParams(P_traceYString, asynParamFloat64Array, P_traceY, 4);
     createNParams(P_traceIdxString, asynParamInt32, P_traceIdx, 4);
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
+    createParam(P_readEventsString, asynParamInt32, &P_readEvents);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
 
     // Create the thread for background tasks (not used at present, could be used for I/O intr scanning) 

@@ -47,6 +47,201 @@ static epicsThreadOnceId onceId = EPICS_THREAD_ONCE_INIT;
 
 static const char *driverName="NucInstDig";
 
+void NucInstDig::setup()
+{
+      rapidjson::Value value;  
+      try {
+        executeCmd("stop_acquisition");
+      }
+      catch(...) {
+          ;
+      }
+//    s=sdk.get_parameter("dgtz.info.section")
+//    section = int(float(s))
+//    sn = sdk.get_parameter("system.serialnumber")
+//    swver = sdk.get_parameter("system.swversion")
+//    compile_data = sdk.get_parameter("system.compile_data")
+//    fwver = sdk.get_parameter("dgtz.probes.fwver")
+
+      getParameter("dgtz.probes.fwver", value);
+      std::cerr << "fwver " << value.GetString() << std::endl;      
+
+
+//    print("sn: " + sn + "  section: " + str(section))
+//    print("SW-VER: " + swver + " (" + compile_data + ")  -- FPGA-VER: "  + fwver)
+
+    // digitizer configuration
+    //set signal polarity to negative "pos" / "neg"
+        setParameter("in.polarity", "neg");
+    // pre-trigger buffer len (us)
+    setParameter("dgtz.pre", 2);
+    // post-trigger acquisition buffer (us)
+    setParameter("dgtz.post", 20);
+    // delay on external trigger (us)
+    setParameter("dgtz.trg_delay", 0);
+    // trigger source: "ext_trigger", "self_le", "self_de", "periodic", "manual", "lemo_0"
+    setParameter("trg.mode", "periodic");
+    // internal trigger mode: "or", "and2", "and"
+    setParameter("trg.self_coinc", "or");
+    // periodic trigger rate (Hz)
+    setParameter("trg.self_rate", 10);
+    // trigger inibition (ns)
+    setParameter("trg.trigger_inib", 10);
+
+    // parameter those are different for each channel of the digitizer
+    for(int i=0; i<8; ++i) {
+        // trigger threshold (LSB)
+        setParameter("trg.threshold", 2000, i);
+        // trigger mask (LSB)
+        setParameter("trg.mask", 0, i);
+        // digital input offset
+        //setParameter("in.offset", -1350, i)
+        setParameter("in.offset", 0, i);
+        // trigger threshold (LSB)
+        //setParameter("in.chmap", CH_MAP[idx*8+i], i);
+        // for us idx=0 and CH_MAP = range(0,32)
+        setParameter("in.chmap", i, i);
+        
+    }
+
+    setParameter("trg.threshold", 1650, 1);
+
+    // multi-photon processing
+    // spectrum readout mode: "manual", "auto"
+    setParameter("mp.spectrum_readout_mode", "manual");
+    // spectrum algorithm: "charge_integrator", "peak_holder"
+    setParameter("mp.spectrum_mode", "charge_integrator");
+    // periodic spectrum send and reset
+    setParameter("mp.auto_spectrum_time", 5000);
+    // acquisition gate length (ms)
+    setParameter("mp.gate_len", 30);
+    // delay from trigger (ms)
+    setParameter("mp.delay_from_trigger", 0.5);
+    // self trigger inibhit (us)
+    setParameter("mp.trigger_inib", 0);
+    // baseline length (samples)
+    setParameter("mp.bl_len", 0.05);
+    // baseline hold (us)
+    setParameter("mp.bl_hold", 0.05);
+    // integration pre trigger
+    setParameter("mp.int_pre", 0.015);//      #25u 0.015 #50u 0.025
+    // integration post trigger
+    setParameter("mp.int_post", 0.015);//  #25u 0.015 #50u 0.1
+    // peak detector search window
+    setParameter("mp.peak_detector_window", 0.2);
+    for(int i=0; i<8; ++i) {
+        // enable multi-photon spectrum
+        setParameter("mp.enable", "true", i);
+        // gain of charge integration
+        setParameter("mp.gain", 2, i);
+        // single photon threshold
+        setParameter("mp.threshold", 10, i);
+
+        setParameter("mp.offset", 150, i);
+        // offset of spectrum
+    }
+
+    // configure io
+    // configure digitizer lemo mode "in_h", "in_50", "out"
+    setParameter("dgtz.lemo.mode", "in_50", 0);
+    setParameter("dgtz.lemo.mode", "out", 1);
+
+    // configure digitizer lemo output source
+    // gnd", "high", "t0_out", "trigger_out", "tot_ch0",
+    // "tot_ch1","tot_ch2","tot_ch3","tot_ch4","tot_ch5","tot_ch6","tot_ch7",
+    // "run", "busy", "acquisition","mp_gate"
+    setParameter("dgtz.lemo.source", "tot_ch0", 0);
+    setParameter("dgtz.lemo.source", "trigger_out", 1);
+
+    // configure digitizer sync_out output source
+    // gnd", "high", "t0_out", "trigger_out", "tot_ch0",
+    // "tot_ch1","tot_ch2","tot_ch3","tot_ch4","tot_ch5","tot_ch6","tot_ch7",
+    // "run", "busy", "acquisition","mp_gate"
+    setParameter("dgtz.sync.outmode", "tot_ch0", 0);
+    setParameter("dgtz.sync.outmode", "tot_ch1", 1);
+    setParameter("dgtz.sync.outmode", "tot_ch2", 2);
+    setParameter("dgtz.sync.outmode", "tot_ch3", 3);
+    setParameter("dgtz.sync.outmode", "tot_ch4", 4);
+    setParameter("dgtz.sync.outmode", "tot_ch5", 5);
+    setParameter("dgtz.sync.outmode", "tot_ch6", 6);
+    setParameter("dgtz.sync.outmode", "tot_ch7", 7);
+
+    // configure base lemo mode "in_h", "in_50", "out"
+    for(int i=0; i<16; ++i) {
+        setParameter("base.lemo.mode", "out", i);
+    }
+
+    // configure base lemo source
+    // "gnd", "high", "t0_out", "common_trigger", "clk_in", "busy", "status_packet",
+    // "sync_a_0","sync_a_1", "sync_a_2", "sync_a_3", "sync_a_4", "sync_a_5", "sync_a_6", "sync_a_7",
+    // "sync_b_0","sync_b_1", "sync_b_2", "sync_b_3", "sync_b_4", "sync_b_5", "sync_b_6", "sync_b_7",
+    // "sync_c_0","sync_c_1", "sync_c_2", "sync_c_3", "sync_c_4", "sync_c_5", "sync_c_6", "sync_c_7",
+    // "sync_d_0","sync_d_1", "sync_d_2", "sync_d_3", "sync_d_4", "sync_d_5", "sync_d_6", "sync_d_7"
+
+    for(int i=0; i<8; ++i) {
+        setParameter("base.lemo.source", "sync_a_" + std::to_string(i), i);
+    }
+    for(int i=0; i<8; ++i) {
+        setParameter("base.lemo.source", "sync_b_" + std::to_string(i), i);
+    }
+
+    // configure base sync source
+    // "gnd", "high", "common_trigger",
+    // "lemo_0", "lemo_1", "lemo_2", "lemo_3", "lemo_4", "lemo_5", "lemo_6", "lemo_7",
+    // "lemo_8", "lemo_9", "lemo_10", "lemo_11", "lemo_12", "lemo_13", "lemo_14", "lemo_15"
+    for(int i=0; i<8; ++i) {
+        setParameter("base.sync.outmode", "gnd", i);
+    }
+
+    setParameter("base.stave.power", "true", 0);
+    setParameter("base.stave.power", "true", 1);
+
+    // configure emulator
+    // trigger inibition (ns)
+    for(int i=0; i<8; ++i) {
+        setParameter("dgtz.emu.amp", 100+100*i,i);
+        setParameter("dgtz.emu.period", 5000,i);
+    }
+    setParameter("dgtz.emu.noiseamp", 0);
+    setParameter("dgtz.emu.offset", 0);
+    setParameter("dgtz.emu.enable_pulse", "false");
+    setParameter("dgtz.emu.enable", "false");
+
+    // test parameter readback
+    for(int i=0; i<16; ++i) {
+        getParameter("base.lemo.mode", value);
+        std::cerr << i << " " << value.GetString() << std::endl;
+        //print(sdk.get_parameter("base.lemo.source"),i);
+    }
+    //for i in range(0, 8):
+        //print(sdk.get_parameter("base.sync.outmode"),i);
+
+    //print(float(sdk.get_parameter("mp.gain")));
+
+    // configure event processor (fixed threshold)
+    setParameter("sw_process.enable", "false");
+    setParameter("sw_process.threshold", 650, 0);
+    setParameter("sw_process.threshold", 650, 1);
+    setParameter("sw_process.threshold", 650, 2);
+    setParameter("sw_process.threshold", 380, 3);
+    setParameter("sw_process.threshold", 3000, 4);
+    setParameter("sw_process.threshold", 3000, 5);
+    setParameter("sw_process.threshold", 3000, 6);
+    setParameter("sw_process.threshold", 3000, 7);
+    setParameter("sw_process.hist", 3);
+
+    executeCmd("configure_dgtz");
+    //executeCmd("configure_staves")
+
+    executeCmd("reset_darkcount_spectra");
+
+    // print(sdk.read_data("get_darkcount_spectra"))
+    // print(sdk.read_data("get_waveforms"))
+    executeCmd("start_acquisition");
+
+}
+
+
 asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
 	int function = pasynUser->reason;
@@ -87,6 +282,9 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else if (function == P_trigRate) {
         setParameter("trg.self_rate", value, 0);
         executeCmd("configure_dgtz", "");
+    }
+    else if (function == P_setup) {
+        setup();
     }
     else if (function >= P_DCSpecIdx[0] && function <= P_DCSpecIdx[3]) {
         int idx = function - P_DCSpecIdx[0];
@@ -432,12 +630,13 @@ void NucInstDig::readData2d(const std::string& name, const std::string& args, Ve
     }
 }
 
-void NucInstDig::getParameter(const std::string& name, int idx)
+void NucInstDig::getParameter(const std::string& name, rapidjson::Value& value, int idx)
 {
     char idxStr[16];
     rapidjson::Document doc_recv;
     sprintf(idxStr, "%d", idx);
-    execute("get_parameter", name, idxStr, "", doc_recv);    
+    execute("get_parameter", name, idxStr, "", doc_recv);
+    value = doc_recv["value"];
 }
 
 void NucInstDig::setParameter(const std::string& name, const std::string& value, int idx)
@@ -565,6 +764,7 @@ NucInstDig::NucInstDig(const char *portName, const char * targetAddress)
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
     createParam(P_trigRateString, asynParamInt32, &P_trigRate);
+    createParam(P_setupString, asynParamInt32, &P_setup);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
 
     // Create the thread for background tasks (not used at present, could be used for I/O intr scanning) 
@@ -642,9 +842,19 @@ void NucInstDig::pollerThread1()
 {
     static const char* functionName = "isisdaePoller1";
     unsigned long counter = 0;
+    rapidjson::Value value;
     while(true)
     {
         lock();
+        try {
+        //getParameter("trg.self_rate", value);
+        //setIntegerParam(P_trigRate, value.GetInt());
+        //callParamCallbacks();
+        }
+        catch(...)
+        {
+            ;
+        }
         unlock();
         epicsThreadSleep(1.0);
     }

@@ -47,6 +47,7 @@ private:
     int P_readDCSpectra; // int
     int P_readEvents; // int
     int P_trigRate; // float
+    int P_setup; // int
     int P_resetDCSpectra; // int
     
     
@@ -58,11 +59,13 @@ private:
     void updateEvents();
     void updateDCSpectra();
     void execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2, rapidjson::Document& doc_recv);
-	void executeCmd(const std::string& name, const std::string& args);
-    void getParameter(const std::string& name, int idx);
-    void setParameter(const std::string& name, const std::string& value, int idx);
-    void setParameter(const std::string& name, double value, int idx);
-    void setParameter(const std::string& name, int value, int idx);
+	void executeCmd(const std::string& name, const std::string& args = "");
+    void getParameter(const std::string& name, rapidjson::Value& value, int idx = 0);
+    void setParameter(const std::string& name, const std::string& value, int idx = 0);
+    void setParameter(const std::string& name, double value, int idx = 0);
+    void setParameter(const std::string& name, int value, int idx = 0);
+    
+    void setup();
     
     void createNParams(const char* name, asynParamType type, int* param, int n);
     
@@ -83,6 +86,7 @@ private:
 #define P_startAcquisitionString	"START"
 #define P_stopAcquisitionString	    "STOP"
 #define P_trigRateString	        "TRIG_RATE"
+#define P_setupString	            "SETUP"
 #define P_resetDCSpectraString	    "RESET_DC_SPECTRA"
 #define P_readDCSpectraString	    "READ_DC_SPECTRA"
 #define P_readEventsString          "READ_EVENTS"

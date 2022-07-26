@@ -44,3 +44,9 @@ record(longin, "$(P)$(Q)TRIG:RATE")
     field(INP,  "@asyn($(PORT),0,0)TRIG_RATE")
 	field(SCAN, "I/O Intr")
 }
+
+record(longout, "$(P)$(Q)SETUP:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)SETUP")
+}

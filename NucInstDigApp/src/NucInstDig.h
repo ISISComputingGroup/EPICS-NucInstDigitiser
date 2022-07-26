@@ -46,7 +46,9 @@ private:
     int P_traceIdx[4]; // int
     int P_readDCSpectra; // int
     int P_readEvents; // int
+    int P_trigRate; // float
     int P_resetDCSpectra; // int
+    
     
 	#define FIRST_NUCINSTDIG_PARAM P_startAcquisition
 	#define LAST_NUCINSTDIG_PARAM P_resetDCSpectra
@@ -80,6 +82,7 @@ private:
 
 #define P_startAcquisitionString	"START"
 #define P_stopAcquisitionString	    "STOP"
+#define P_trigRateString	        "TRIG_RATE"
 #define P_resetDCSpectraString	    "RESET_DC_SPECTRA"
 #define P_readDCSpectraString	    "READ_DC_SPECTRA"
 #define P_readEventsString          "READ_EVENTS"

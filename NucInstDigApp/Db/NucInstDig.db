@@ -31,3 +31,16 @@ record(bo, "$(P)$(Q)READ_EVENTS")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 }
+
+record(longout, "$(P)$(Q)TRIG:RATE:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)TRIG_RATE")
+}
+
+record(longin, "$(P)$(Q)TRIG:RATE")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0,0)TRIG_RATE")
+	field(SCAN, "I/O Intr")
+}

@@ -84,6 +84,10 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else if (function == P_resetDCSpectra) {
         executeCmd("reset_darkcount_spectra", "");
     }
+    else if (function == P_trigRate) {
+        setParameter("trg.self_rate", value, 0);
+        executeCmd("configure_dgtz", "");
+    }
     else if (function >= P_DCSpecIdx[0] && function <= P_DCSpecIdx[3]) {
         int idx = function - P_DCSpecIdx[0];
         m_DCSpecIdx[idx] = value;
@@ -483,10 +487,10 @@ void NucInstDig::execute(const std::string& type, const std::string& name, const
     }
     else if (type == "set_parameter")
     {
-        arg1v.SetInt(atol(arg1.c_str()));
-        arg2v.SetString(arg2.c_str(), doc_send.GetAllocator());
-        doc_send.AddMember("idx", arg1v, doc_send.GetAllocator());
-        doc_send.AddMember("value", arg2v, doc_send.GetAllocator());
+        arg1v.SetString(arg1.c_str(), doc_send.GetAllocator());
+        arg2v.SetInt(atol(arg2.c_str()));
+        doc_send.AddMember("value", arg1v, doc_send.GetAllocator());
+        doc_send.AddMember("idx", arg2v, doc_send.GetAllocator());
     }
     else if (type == "execute_read_command")
     {
@@ -560,6 +564,7 @@ NucInstDig::NucInstDig(const char *portName, const char * targetAddress)
     createNParams(P_traceIdxString, asynParamInt32, P_traceIdx, 4);
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
+    createParam(P_trigRateString, asynParamInt32, &P_trigRate);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
 
     // Create the thread for background tasks (not used at present, could be used for I/O intr scanning) 
@@ -637,6 +642,12 @@ void NucInstDig::pollerThread1()
 {
     static const char* functionName = "isisdaePoller1";
     unsigned long counter = 0;
+    while(true)
+    {
+        lock();
+        unlock();
+        epicsThreadSleep(1.0);
+    }
 }
 
 void NucInstDig::pollerThread2()

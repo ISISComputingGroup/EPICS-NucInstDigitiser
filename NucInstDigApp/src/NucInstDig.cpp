@@ -71,10 +71,12 @@ void NucInstDig::setup()
 //    print("SW-VER: " + swver + " (" + compile_data + ")  -- FPGA-VER: "  + fwver)
 
     // digitizer configuration
+    // the delay minimum between trigger and status packet redout
+    setParameter("dgtz.send_delay", "0");
     //set signal polarity to negative "pos" / "neg"
-        setParameter("in.polarity", "neg");
+    setParameter("in.polarity", "neg");
     // pre-trigger buffer len (us)
-    setParameter("dgtz.pre", 2);
+    setParameter("dgtz.pre", 0.5);
     // post-trigger acquisition buffer (us)
     setParameter("dgtz.post", 20);
     // delay on external trigger (us)
@@ -84,7 +86,7 @@ void NucInstDig::setup()
     // internal trigger mode: "or", "and2", "and"
     setParameter("trg.self_coinc", "or");
     // periodic trigger rate (Hz)
-    setParameter("trg.self_rate", 10);
+    setParameter("trg.self_rate", 50);
     // trigger inibition (ns)
     setParameter("trg.trigger_inib", 10);
 
@@ -100,11 +102,31 @@ void NucInstDig::setup()
         // trigger threshold (LSB)
         //setParameter("in.chmap", CH_MAP[idx*8+i], i);
         // for us idx=0 and CH_MAP = range(0,32)
-        setParameter("in.chmap", i, i);
-        
+        setParameter("in.chmap", 8 * m_dig_idx + i, i);        
     }
 
-    setParameter("trg.threshold", 1650, 1);
+    // configure BIAS
+    setParameter("stave.BIAS.enable", "false",0);
+    setParameter("stave.BIAS.V", 59,0);
+    setParameter("stave.BIAS.max_v", 62,0);
+    setParameter("stave.BIAS.max_i", 3,0);
+
+    setParameter("stave.BIAS.enable", "false",1);
+    setParameter("stave.BIAS.V", 52,1);
+    setParameter("stave.BIAS.max_v", 58,1);
+    setParameter("stave.BIAS.max_i", 3,1);
+
+    //    # configure BIAS compensation
+    for(int i=0; i<24; ++i) {
+        // correction_mode "off", "auto", "manual"
+        setParameter("stave.BIAS.correction_mode", "manual",i);
+        setParameter("stave.BIAS.correction_manual", 0.2,i);
+        // SiPM correction coefficient in V/°C
+        setParameter("stave.BIAS.correction_coeff", 0.035);
+        // offset in V
+        setParameter("stave.offset", 0,i);
+    }
+
 
     // multi-photon processing
     // spectrum readout mode: "manual", "auto"
@@ -126,7 +148,7 @@ void NucInstDig::setup()
     // integration pre trigger
     setParameter("mp.int_pre", 0.015);//      #25u 0.015 #50u 0.025
     // integration post trigger
-    setParameter("mp.int_post", 0.015);//  #25u 0.015 #50u 0.1
+    setParameter("mp.int_post", 0.100);//  #25u 0.015 #50u 0.1
     // peak detector search window
     setParameter("mp.peak_detector_window", 0.2);
     for(int i=0; i<8; ++i) {
@@ -135,7 +157,7 @@ void NucInstDig::setup()
         // gain of charge integration
         setParameter("mp.gain", 2, i);
         // single photon threshold
-        setParameter("mp.threshold", 10, i);
+        setParameter("mp.threshold", 15, i);
 
         setParameter("mp.offset", 150, i);
         // offset of spectrum
@@ -157,18 +179,22 @@ void NucInstDig::setup()
     // gnd", "high", "t0_out", "trigger_out", "tot_ch0",
     // "tot_ch1","tot_ch2","tot_ch3","tot_ch4","tot_ch5","tot_ch6","tot_ch7",
     // "run", "busy", "acquisition","mp_gate"
-    setParameter("dgtz.sync.outmode", "tot_ch0", 0);
-    setParameter("dgtz.sync.outmode", "tot_ch1", 1);
-    setParameter("dgtz.sync.outmode", "tot_ch2", 2);
-    setParameter("dgtz.sync.outmode", "tot_ch3", 3);
-    setParameter("dgtz.sync.outmode", "tot_ch4", 4);
-    setParameter("dgtz.sync.outmode", "tot_ch5", 5);
-    setParameter("dgtz.sync.outmode", "tot_ch6", 6);
-    setParameter("dgtz.sync.outmode", "tot_ch7", 7);
+    //setParameter("dgtz.sync.outmode", "tot_ch0", 0);
+    //setParameter("dgtz.sync.outmode", "tot_ch1", 1);
+    //setParameter("dgtz.sync.outmode", "tot_ch2", 2);
+    //setParameter("dgtz.sync.outmode", "tot_ch3", 3);
+    //setParameter("dgtz.sync.outmode", "tot_ch4", 4);
+    //setParameter("dgtz.sync.outmode", "tot_ch5", 5);
+    //setParameter("dgtz.sync.outmode", "tot_ch6", 6);
+    //setParameter("dgtz.sync.outmode", "tot_ch7", 7);
+    for(int i=0; i<8; ++i) {
+        setParameter("dgtz.sync.outmode", "gnd", i);
+    }
+    setParameter("dgtz.sync.outmode", "trigger_out", 0);
 
-    // configure base lemo mode "in_h", "in_50", "out"
+    // configure base lemo mode "in", "out"
     for(int i=0; i<16; ++i) {
-        setParameter("base.lemo.mode", "out", i);
+        setParameter("base.lemo.mode", "in", i);
     }
 
     // configure base lemo source
@@ -178,11 +204,14 @@ void NucInstDig::setup()
     // "sync_c_0","sync_c_1", "sync_c_2", "sync_c_3", "sync_c_4", "sync_c_5", "sync_c_6", "sync_c_7",
     // "sync_d_0","sync_d_1", "sync_d_2", "sync_d_3", "sync_d_4", "sync_d_5", "sync_d_6", "sync_d_7"
 
-    for(int i=0; i<8; ++i) {
-        setParameter("base.lemo.source", "sync_a_" + std::to_string(i), i);
-    }
-    for(int i=0; i<8; ++i) {
-        setParameter("base.lemo.source", "sync_b_" + std::to_string(i), i);
+    //for(int i=0; i<8; ++i) {
+    //    setParameter("base.lemo.source", "sync_a_" + std::to_string(i), i);
+    //}
+    //for(int i=0; i<8; ++i) {
+    //    setParameter("base.lemo.source", "sync_b_" + std::to_string(i), i);
+    //}
+    for(int i=0; i<16; ++i) {
+        setParameter("base.lemo.source", "gnd", i);
     }
 
     // configure base sync source
@@ -196,6 +225,41 @@ void NucInstDig::setup()
     setParameter("base.stave.power", "true", 0);
     setParameter("base.stave.power", "true", 1);
 
+    setParameter("base.pulsegen.freq", 100000.0, 0);
+
+    // configure status packet frame source uart
+    // "lemo_0", "lemo_4", "lemo_8", "lemo_12", "rj45_lvds_0", "lvds_0", "lvds_8", "lvds_16", "lvds_24"
+    //  "frame_usart_tx"
+    setParameter("base.sp_rx.frame_source", "frame_usart_tx", 0);
+    
+   // configure status packet veto source uart
+    // "lemo_1", "lemo_5", "lemo_9", "lemo_13", "rj45_lvds_1", "lvds_1", "lvds_9", "lvds_17", "lvds_25"
+    // "veto_usart_tx"
+    setParameter("base.sp_rx.veto_source", "veto_usart_tx", 0);
+    // configure T0 source
+    // "gnd", "high", "t0_self", "rj45_lvds_0", "rj45_lvds_1", "rj45_lvds_2", "rj45_lvds_3",
+    // "lvds_0", "lvds_1", "lvds_2", "lvds_3", "lvds_28", "lvds_29", "lvds_30", "lvds_31",
+    // "lemo_0", "lemo_1", "lemo_2", "lemo_3", "lemo_4", "lemo_5", "lemo_6", "lemo_7",
+    // "lemo_8", "lemo_9", "lemo_10", "lemo_11", "lemo_12", "lemo_13", "lemo_14", "lemo_15"
+    setParameter("base.t0.source", "lemo_0", 0);
+
+    setParameter("base.t0.freq", 25.0, 0);
+    
+        // configure common_clk source
+    // "clk_int", "clk_ext", "rj45_lvds_0", "rj45_lvds_1", "rj45_lvds_2", "rj45_lvds_3",
+    // "lvds_16", "lvds_26"
+    setParameter("base.common_clock.source", "clk_int", 0);
+
+
+    // configure adc_sync source
+    // "internal", "gnd", "high", "rj45_lvds_0", "rj45_lvds_1", "rj45_lvds_2", "rj45_lvds_3",
+    // "lvds_6", "lvds_14", "lvds_23", "lvds_27",
+    // "lemo_0", "lemo_1", "lemo_2", "lemo_3", "lemo_4", "lemo_5", "lemo_6", "lemo_7",
+    // "lemo_8", "lemo_9", "lemo_10", "lemo_11", "lemo_12", "lemo_13", "lemo_14", "lemo_15"
+
+    setParameter("base.adc_sync.source", "internal", 0);
+    
+    
     // configure emulator
     // trigger inibition (ns)
     for(int i=0; i<8; ++i) {
@@ -211,7 +275,12 @@ void NucInstDig::setup()
     for(int i=0; i<16; ++i) {
         getParameter("base.lemo.mode", value);
         std::cerr << i << " " << value.GetString() << std::endl;
-        //print(sdk.get_parameter("base.lemo.source"),i);
+        getParameter("base.lemo.source", value);
+        std::cerr << i << " " << value.GetString() << std::endl;
+    }
+    for(int i=0; i<8; ++i) {
+        getParameter("base.sync.outmode", value);
+        std::cerr << i << " " << value.GetString() << std::endl;
     }
     //for i in range(0, 8):
         //print(sdk.get_parameter("base.sync.outmode"),i);
@@ -220,18 +289,21 @@ void NucInstDig::setup()
 
     // configure event processor (fixed threshold)
     setParameter("sw_process.enable", "false");
-    setParameter("sw_process.threshold", 650, 0);
-    setParameter("sw_process.threshold", 650, 1);
-    setParameter("sw_process.threshold", 650, 2);
-    setParameter("sw_process.threshold", 380, 3);
+    setParameter("sw_process.threshold", 520, 0);
+    setParameter("sw_process.threshold", 500, 1);
+    setParameter("sw_process.threshold", 520, 2);
+    setParameter("sw_process.threshold", 460, 3);
     setParameter("sw_process.threshold", 3000, 4);
     setParameter("sw_process.threshold", 3000, 5);
     setParameter("sw_process.threshold", 3000, 6);
     setParameter("sw_process.threshold", 3000, 7);
-    setParameter("sw_process.hist", 3);
+    setParameter("sw_process.hist", 10);
+    setParameter("base.stave.power", "true", 0);
 
     executeCmd("configure_dgtz");
-    //executeCmd("configure_staves")
+    executeCmd("configure_base");
+    executeCmd("configure_hv");
+    executeCmd("configure_staves");
 
     executeCmd("reset_darkcount_spectra");
 
@@ -733,7 +805,7 @@ void NucInstDig::createNParams(const char* name, asynParamType type, int* param,
 /// Calls constructor for the asynPortDriver base class.
 /// \param[in] dcomint DCOM interface pointer created by lvDCOMConfigure()
 /// \param[in] portName @copydoc initArg0
-NucInstDig::NucInstDig(const char *portName, const char * targetAddress)
+NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_idx)
    : ADDriver(portName, 1, 100,
 					0, // maxBuffers
 					0, // maxMemory
@@ -746,7 +818,8 @@ NucInstDig::NucInstDig(const char *portName, const char * targetAddress)
 					 m_pRaw(NULL),
                      m_zmq_events_ctx{1}, m_zmq_events_socket(m_zmq_events_ctx, zmq::socket_type::pull),
                      m_zmq_cmd_ctx{1}, m_zmq_cmd_socket(m_zmq_cmd_ctx, zmq::socket_type::req),
-                     m_zmq_stream_ctx{1}, m_zmq_stream_socket(m_zmq_stream_ctx, zmq::socket_type::pull)
+                     m_zmq_stream_ctx{1}, m_zmq_stream_socket(m_zmq_stream_ctx, zmq::socket_type::pull),
+                     m_dig_idx(dig_idx)
 {					
     const char *functionName = "NucInstDig";
     
@@ -899,11 +972,11 @@ void NucInstDig::report(FILE *fp, int details)
     ADDriver::report(fp, details);
 }
 
-int nucInstDigConfigure(const char *portName, const char *targetAddress)
+int nucInstDigConfigure(const char *portName, const char *targetAddress, int dig_idx)
 {
 	try
 	{
-		NucInstDig* iface = new NucInstDig(portName, targetAddress);
+		NucInstDig* iface = new NucInstDig(portName, targetAddress, dig_idx);
 		return(asynSuccess);
 	}
 	catch(const std::exception& ex)
@@ -920,14 +993,15 @@ extern "C" {
     
 static const iocshArg initArg0 = { "portName", iocshArgString};			///< The name of the asyn driver port we will
 static const iocshArg initArg1 = { "targetAddress", iocshArgString};			///< The name of the asyn driver port we will create
+static const iocshArg initArg2 = { "digitiserIndex", iocshArgInt};			///< The name of the asyn driver port we will create
 
-static const iocshArg * const initArgs[] = { &initArg0, &initArg1 };
+static const iocshArg * const initArgs[] = { &initArg0, &initArg1, &initArg2 };
 
 static const iocshFuncDef initFuncDef = {"nucInstDigConfigure", sizeof(initArgs) / sizeof(iocshArg*), initArgs};
 
 static void initCallFunc(const iocshArgBuf *args)
 {
-    nucInstDigConfigure(args[0].sval, args[1].sval);
+    nucInstDigConfigure(args[0].sval, args[1].sval, args[2].ival);
 }
 
 static void nucInstDigRegister(void)

@@ -8,7 +8,7 @@ typedef std::vector< std::vector<double> > Vector2D;
 class NucInstDig : public ADDriver
 {
 public:
-    NucInstDig(const char *portName, const char *targetAddress);
+    NucInstDig(const char *portName, const char *targetAddress, int dig_idx);
  	static void pollerThreadC1(void* arg);
  	static void pollerThreadC2(void* arg);
  	static void pollerThreadC3(void* arg);
@@ -80,7 +80,9 @@ private:
     int m_traceIdx[4];
     std::vector<double> m_DCSpecX[4];
     std::vector<double> m_DCSpecY[4];
-    int m_DCSpecIdx[4];	  
+    int m_DCSpecIdx[4];
+    
+    int m_dig_idx;
 };
 
 #define P_startAcquisitionString	"START"

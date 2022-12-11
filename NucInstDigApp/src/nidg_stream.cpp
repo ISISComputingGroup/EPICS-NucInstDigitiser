@@ -13,7 +13,16 @@ int main(int argc, char* argv[])
 {
     zmq::context_t ctx{1};
     zmq::socket_t socket(ctx, zmq::socket_type::pull);
-    socket.connect(argv[1]);
+    std::string addr = std::string("tcp://") + argv[1] + ":5556";
+    try {
+        socket.connect(addr.c_str());
+    }
+    catch(const std::exception& ex)
+    {
+        std::cerr << "Unable to connect to " << addr << " - " << ex.what() << std::endl;
+        return 1;    
+    }
+    std::cerr << "Connected to " << addr << std::endl;
     while(true) {
     zmq::message_t reply{};
     socket.recv(reply, zmq::recv_flags::none);

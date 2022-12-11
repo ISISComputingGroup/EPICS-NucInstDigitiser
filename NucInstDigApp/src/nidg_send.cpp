@@ -13,7 +13,16 @@ int main(int argc, char* argv[])
     zmq::context_t ctx{1};
     zmq::socket_t socket(ctx, zmq::socket_type::req);
     std::string type = argv[1];
-    socket.connect(argv[2]);
+    std::string addr = std::string("tcp://") + argv[2] + ":5557";
+    try {
+        socket.connect(addr.c_str());
+    }
+    catch(const std::exception& ex)
+    {
+        std::cerr << "Unable to connect to " << addr << " - " << ex.what() << std::endl;
+        return 1;    
+    }
+    std::cerr << "Connected to " << addr << std::endl;
     rapidjson::Document doc_send;
     rapidjson::Value arg3((argc > 3 ? argv[3] : ""), doc_send.GetAllocator());
     rapidjson::Value arg4;
@@ -68,7 +77,7 @@ int main(int argc, char* argv[])
     }
     catch(const std::exception& ex)
     {
-        std::cerr << ex.what() << std::endl;
+        std::cerr << "Exception: " << ex.what() << std::endl;
         return 1;    
     }
 }

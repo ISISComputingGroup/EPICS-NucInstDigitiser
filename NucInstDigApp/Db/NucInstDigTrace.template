@@ -23,4 +23,14 @@ record(longout, "$(P)$(Q)TRACE$(N):IDX")
     field(DESC, "Spectrum Numbers")
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),0,0)TRACE$(N)IDX")
+	field(PINI, "YES")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(Q)TRACE$(N):UPDATING")
+{
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(VAL, "1")
+	field(PINI, "YES")
 }

@@ -23,4 +23,13 @@ record(longout, "$(P)$(Q)DCSPEC$(N):IDX")
     field(DESC, "Spectrum Numbers")
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),0,0)DCSPEC$(N)IDX")
+	field(PINI, "YES")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(Q)DCSPEC$(N):UPDATING")
+{
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(INP, "$(P)$(Q)READ_DC_SPECTRA CP")
 }

@@ -1,0 +1,25 @@
+# EPARAM - epics param name
+# DPARAM - digitiser param name
+# PORT digitiser port
+# EGU units
+
+record(ao, "$(P)$(Q)$(EPARAM):SP")
+{
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),D,0,0")
+	field(UDFS, "NO_ALARM")
+	field(EGU, "$(EGU=)")
+    field(PREC, 3)
+	info(archive, "VAL")
+}
+
+record(ai, "$(P)$(Q)$(EPARAM)")
+{
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),D,0,0")
+	field(SCAN, "I/O Intr")
+	field(EGU, "$(EGU=)")
+    field(PREC, 3)
+	info(archive, "VAL")
+}
+

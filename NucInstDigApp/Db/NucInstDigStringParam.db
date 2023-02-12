@@ -1,0 +1,20 @@
+# EPARAM - epics param name
+# DPARAM - digitiser param name
+# PORT digitiser port
+
+record(stringout, "$(P)$(Q)$(EPARAM):SP")
+{
+    field(DTYP, "asynOctetWrite")
+    field(OUT,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),S,0,0")
+	field(UDFS, "NO_ALARM")
+	info(archive, "VAL")
+}
+
+record(stringin, "$(P)$(Q)$(EPARAM)")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),S,0,0")
+	field(SCAN, "I/O Intr")
+	info(archive, "VAL")
+}
+

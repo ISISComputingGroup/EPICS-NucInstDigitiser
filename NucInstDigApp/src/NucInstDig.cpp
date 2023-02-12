@@ -321,6 +321,15 @@ asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 	{
         return ADDriver::writeFloat64(pasynUser, value);
 	}
+    else
+    {
+        auto it = m_param_data.find(function);
+        if (it != m_param_data.end())
+        {
+            const ParamData* p = it->second;
+            setParameter(p->name, value, p->chan);
+        }
+    }    
     asynStatus stat = asynSuccess;
 	if (stat == asynSuccess)
 	{
@@ -351,9 +360,17 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else if (function == P_resetDCSpectra) {
         executeCmd("reset_darkcount_spectra", "");
     }
-    else if (function == P_trigRate) {
-        setParameter("trg.self_rate", value, 0);
+    else if (function == P_configDGTZ) {
         executeCmd("configure_dgtz", "");
+    }
+    else if (function == P_configBASE) {
+        executeCmd("configure_base", "");
+    }
+    else if (function == P_configHV) {
+        executeCmd("configure_hv", "");
+    }
+    else if (function == P_configSTAVES) {
+        executeCmd("configure_staves", "");
     }
     else if (function == P_setup) {
         setup();
@@ -365,6 +382,15 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else if (function >= P_traceIdx[0] && function <= P_traceIdx[3]) {
         int idx = function - P_traceIdx[0];
         m_traceIdx[idx] = value;
+    }
+    else
+    {
+        auto it = m_param_data.find(function);
+        if (it != m_param_data.end())
+        {
+            const ParamData* p = it->second;
+            setParameter(p->name, value, p->chan);
+        }
     }
 	if (stat == asynSuccess)
 	{
@@ -519,10 +545,16 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
 		{
 		    status = ADDriver::writeOctet(pasynUser, value_s.c_str(), value_s.size(), nActual);
 		}
-		else
-		{
-		    status = asynPortDriver::writeOctet(pasynUser, value_s.c_str(), value_s.size(), nActual); // update parameters and do callbacks
-		}
+        else
+        {
+            auto it = m_param_data.find(function);
+            if (it != m_param_data.end())
+            {
+                const ParamData* p = it->second;
+                setParameter(p->name, value_s, p->chan);
+            }
+        }    
+		status = asynPortDriver::writeOctet(pasynUser, value_s.c_str(), value_s.size(), nActual); // update parameters and do callbacks
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
               "%s:%s: function=%d, name=%s, value=%s\n", 
               driverName, functionName, function, paramName, value_s.c_str());
@@ -828,6 +860,10 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
     createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition); // must be first
     createParam(P_stopAcquisitionString, asynParamInt32, &P_stopAcquisition);
+    createParam(P_configDGTZString, asynParamInt32, &P_configDGTZ);    
+    createParam(P_configBASEString, asynParamInt32, &P_configBASE);    
+    createParam(P_configHVString, asynParamInt32, &P_configHV);    
+    createParam(P_configSTAVESString, asynParamInt32, &P_configSTAVES);    
     createNParams(P_DCSpecXString, asynParamFloat64Array, P_DCSpecX, 4);
     createNParams(P_DCSpecYString, asynParamFloat64Array, P_DCSpecY, 4);
     createNParams(P_DCSpecIdxString, asynParamInt32, P_DCSpecIdx, 4);
@@ -836,7 +872,6 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     createNParams(P_traceIdxString, asynParamInt32, P_traceIdx, 4);
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
-    createParam(P_trigRateString, asynParamInt32, &P_trigRate);
     createParam(P_setupString, asynParamInt32, &P_setup);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
 
@@ -920,9 +955,24 @@ void NucInstDig::pollerThread1()
     {
         lock();
         try {
-        //getParameter("trg.self_rate", value);
-        //setIntegerParam(P_trigRate, value.GetInt());
-        //callParamCallbacks();
+            for(const auto& kv : m_param_data)
+            {
+                const ParamData* p = kv.second;
+                getParameter(p->name, value, p->chan);
+                if (p->type == asynParamInt32)
+                {
+                    setIntegerParam(kv.first, value.GetInt());
+                }
+                else if (p->type == asynParamFloat64)
+                {
+                    setDoubleParam(kv.first, value.GetDouble());
+                }
+                else if (p->type == asynParamOctet)
+                {
+                    setStringParam(kv.first, value.GetString());
+                }
+            }
+            callParamCallbacks();
         }
         catch(...)
         {
@@ -970,6 +1020,64 @@ void NucInstDig::report(FILE *fp, int details)
     }
     /* Invoke the base class method */
     ADDriver::report(fp, details);
+}
+
+
+asynStatus NucInstDig::drvUserCreate(asynUser *pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize)
+{
+   // PARAM,name,type,chan,log_freq
+   if (strncmp(drvInfo, "PARAM,", 6) == 0)
+     {
+         std::string param_name;
+         std::vector<std::string> split_vec;
+         int param_index;
+         asynParamType param_type;
+         boost::split(split_vec, drvInfo, boost::is_any_of(","), boost::token_compress_on);
+         if (split_vec.size() == 5)
+         {
+             param_name = split_vec[0] + "_" + split_vec[1] + "_" + split_vec[3];
+             if (findParam(param_name.c_str(), &param_index) == asynSuccess)
+             {
+                 pasynUser->reason = param_index;
+                 return asynSuccess;
+             }
+             if (split_vec[2] == "I")
+             {
+                 param_type = asynParamInt32;
+             }
+             else if (split_vec[2] == "D")
+             {
+                 param_type = asynParamFloat64;
+             }
+             else if (split_vec[2] == "S")
+             {
+                 param_type = asynParamOctet;
+             }
+             else
+             {
+                 std::cerr << "ERROR: Param " << param_name << " invalid type " << split_vec[2] << std::endl;
+                 return asynError;
+             }
+             if (createParam(param_name.c_str(), param_type, &param_index) == asynSuccess)
+             {
+                 m_param_data[param_index] = new ParamData(split_vec[1], param_type, atoi(split_vec[3].c_str()), atoi(split_vec[4].c_str()));
+                 pasynUser->reason = param_index;
+                 return asynSuccess;
+             }
+         }
+         std::cerr << "ERROR: Incorrect field count in drvInfo " << drvInfo << std::endl;
+         return asynError;
+     }
+  else
+     {
+     return ADDriver::drvUserCreate(pasynUser, drvInfo, pptypeName, psize);
+     }
+}
+
+// used to free pasynUser->userData is needed
+asynStatus NucInstDig::drvUserDestroy(asynUser *pasynUser)
+{
+   return ADDriver::drvUserDestroy(pasynUser);
 }
 
 int nucInstDigConfigure(const char *portName, const char *targetAddress, int dig_idx)

@@ -14,12 +14,45 @@ record(bo, "$(P)$(Q)STOP:SP")
 }
 alias("$(P)$(Q)STOP:SP", "$(P)$(Q)STOP")
 
+record(bo, "$(P)$(Q)CONFIG:DGTZ:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)CONFIG_DGTZ")
+	field(UDFS, "NO_ALARM")
+}
+alias("$(P)$(Q)CONFIG:DGTZ:SP", "$(P)$(Q)CONFIG:DGTZ")
+
+record(bo, "$(P)$(Q)CONFIG:HV:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)CONFIG_HV")
+	field(UDFS, "NO_ALARM")
+}
+alias("$(P)$(Q)CONFIG:HV:SP", "$(P)$(Q)CONFIG:HV")
+
+record(bo, "$(P)$(Q)CONFIG:STAVES:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)CONFIG_STAVES")
+	field(UDFS, "NO_ALARM")
+}
+alias("$(P)$(Q)CONFIG:STAVES:SP", "$(P)$(Q)CONFIG:STAVES")
+
+record(bo, "$(P)$(Q)CONFIG:BASE:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)CONFIG_BASE")
+	field(UDFS, "NO_ALARM")
+}
+alias("$(P)$(Q)CONFIG:BASE:SP", "$(P)$(Q)CONFIG:BASE")
+
 record(bo, "$(P)$(Q)RESET_DC_SPECTRA:SP")
 {
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),0,0)RESET_DC_SPECTRA")
 	field(UDFS, "NO_ALARM")
 }
+alias("$(P)$(Q)RESET_DC_SPECTRA:SP", "$(P)$(Q)RESET_DC_SPECTRA")
 
 record(bo, "$(P)$(Q)READ_DC_SPECTRA:SP")
 {
@@ -47,6 +80,8 @@ record(bo, "$(P)$(Q)READ_EVENTS:SP")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 	field(UDFS, "NO_ALARM")
+#	field(PINI, "YES")
+#    info(autosaveFields, "VAL")
 }
 
 record(bi, "$(P)$(Q)READ_EVENTS")
@@ -58,23 +93,10 @@ record(bi, "$(P)$(Q)READ_EVENTS")
 	field(SCAN, "I/O Intr")
 }
 
-record(longout, "$(P)$(Q)TRIG:RATE:SP")
-{
-    field(DTYP, "asynInt32")
-    field(OUT,  "@asyn($(PORT),0,0)TRIG_RATE")
-	field(UDFS, "NO_ALARM")
-}
-
-record(longin, "$(P)$(Q)TRIG:RATE")
-{
-    field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT),0,0)TRIG_RATE")
-	field(SCAN, "I/O Intr")
-}
-
 record(longout, "$(P)$(Q)SETUP:SP")
 {
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),0,0)SETUP")
 	field(UDFS, "NO_ALARM")
 }
+alias("$(P)$(Q)SETUP:SP", "$(P)$(Q)SETUP")

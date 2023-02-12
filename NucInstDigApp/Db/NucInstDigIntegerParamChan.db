@@ -1,0 +1,24 @@
+# EPARAM - epics param name
+# DPARAM - digitiser param name
+# PORT - digitiser port
+# CHAN - channel
+# EGU - units
+
+record(longout, "$(P)$(Q)$(EPARAM):$(CHAN):SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),I,$(CHAN),0")
+	field(UDFS, "NO_ALARM")
+	field(EGU, "$(EGU=)")
+	info(archive, "VAL")
+}
+
+record(longin, "$(P)$(Q)$(EPARAM):$(CHAN)")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),I,$(CHAN),0")
+	field(SCAN, "I/O Intr")
+	field(EGU, "$(EGU=)")
+	info(archive, "VAL")
+}
+

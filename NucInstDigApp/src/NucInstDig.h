@@ -5,6 +5,15 @@
 
 typedef std::vector< std::vector<double> > Vector2D;
 
+struct ParamData
+{
+    std::string name;
+    asynParamType type;
+    int chan;
+    int log_freq;
+    ParamData(const std::string& name_, asynParamType type_, int chan_, int log_freq_) : name(name_), type(type_), chan(chan_), log_freq(log_freq_) { }
+};
+
 class NucInstDig : public ADDriver
 {
 public:
@@ -46,10 +55,14 @@ private:
     int P_traceIdx[4]; // int
     int P_readDCSpectra; // int
     int P_readEvents; // int
-    int P_trigRate; // float
     int P_setup; // int
+    int P_configDGTZ; // int
+    int P_configBASE; // int
+    int P_configHV; // int
+    int P_configSTAVES; // int
     int P_resetDCSpectra; // int
     
+    std::map<int, ParamData*> m_param_data;
     
 	#define FIRST_NUCINSTDIG_PARAM P_startAcquisition
 	#define LAST_NUCINSTDIG_PARAM P_resetDCSpectra
@@ -64,6 +77,10 @@ private:
     void setParameter(const std::string& name, const std::string& value, int idx = 0);
     void setParameter(const std::string& name, double value, int idx = 0);
     void setParameter(const std::string& name, int value, int idx = 0);
+
+    //This is for dynamically creating asyn parameters
+    asynStatus drvUserCreate(asynUser* pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize); 
+    asynStatus drvUserDestroy(asynUser *pasynUser);
     
     void setup();
     
@@ -87,8 +104,11 @@ private:
 
 #define P_startAcquisitionString	"START"
 #define P_stopAcquisitionString	    "STOP"
-#define P_trigRateString	        "TRIG_RATE"
 #define P_setupString	            "SETUP"
+#define P_configDGTZString          "CONFIG_DGTZ" 
+#define P_configBASEString          "CONFIG_BASE" 
+#define P_configHVString            "CONFIG_HV" 
+#define P_configSTAVESString        "CONFIG_STAVES" 
 #define P_resetDCSpectraString	    "RESET_DC_SPECTRA"
 #define P_readDCSpectraString	    "READ_DC_SPECTRA"
 #define P_readEventsString          "READ_EVENTS"
@@ -98,4 +118,5 @@ private:
 #define P_traceXString              "TRACE%dX"
 #define P_traceYString              "TRACE%dY"
 #define P_traceIdxString            "TRACE%dIDX"
+
 #endif /* NUCINSTDIG_H */

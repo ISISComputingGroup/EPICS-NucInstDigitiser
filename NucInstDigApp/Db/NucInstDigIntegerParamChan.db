@@ -3,6 +3,7 @@
 # PORT - digitiser port
 # CHAN - channel
 # EGU - units
+# DESC - dscription
 
 record(longout, "$(P)$(Q)$(EPARAM):$(CHAN):SP")
 {
@@ -10,6 +11,7 @@ record(longout, "$(P)$(Q)$(EPARAM):$(CHAN):SP")
     field(OUT,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),I,$(CHAN),0")
 	field(UDFS, "NO_ALARM")
 	field(EGU, "$(EGU=)")
+	field(DESC, "$(DESC=$(DPARAM))")
 	info(archive, "VAL")
 }
 
@@ -19,6 +21,7 @@ record(longin, "$(P)$(Q)$(EPARAM):$(CHAN)")
     field(INP,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),I,$(CHAN),0")
 	field(SCAN, "I/O Intr")
 	field(EGU, "$(EGU=)")
+	field(DESC, "$(DESC=$(DPARAM))")
 	info(archive, "VAL")
 }
 

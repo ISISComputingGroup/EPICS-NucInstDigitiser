@@ -80,8 +80,8 @@ record(bo, "$(P)$(Q)READ_EVENTS:SP")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 	field(UDFS, "NO_ALARM")
-#	field(PINI, "YES")
-#    info(autosaveFields, "VAL")
+	field(PINI, "YES")
+    info(autosaveFields, "VAL")
 }
 
 record(bi, "$(P)$(Q)READ_EVENTS")

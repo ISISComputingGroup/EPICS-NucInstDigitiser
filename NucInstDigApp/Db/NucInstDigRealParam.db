@@ -2,6 +2,7 @@
 # DPARAM - digitiser param name
 # PORT digitiser port
 # EGU units
+# DESC - description
 
 record(ao, "$(P)$(Q)$(EPARAM):SP")
 {
@@ -9,6 +10,7 @@ record(ao, "$(P)$(Q)$(EPARAM):SP")
     field(OUT,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),D,0,0")
 	field(UDFS, "NO_ALARM")
 	field(EGU, "$(EGU=)")
+	field(DESC, "$(DESC=$(DPARAM))")
     field(PREC, 3)
 	info(archive, "VAL")
 }
@@ -19,6 +21,7 @@ record(ai, "$(P)$(Q)$(EPARAM)")
     field(INP,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),D,0,0")
 	field(SCAN, "I/O Intr")
 	field(EGU, "$(EGU=)")
+	field(DESC, "$(DESC=$(DPARAM))")
     field(PREC, 3)
 	info(archive, "VAL")
 }

@@ -2,12 +2,14 @@
 # DPARAM - digitiser param name
 # PORT - digitiser port
 # CHAN - channel
+# DESC - description
 
 record(stringout, "$(P)$(Q)$(EPARAM):$(CHAN):SP")
 {
     field(DTYP, "asynOctetWrite")
     field(OUT,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),S,$(CHAN),0")
 	field(UDFS, "NO_ALARM")
+	field(DESC, "$(DESC=$(DPARAM))")
 	info(archive, "VAL")
 }
 
@@ -16,6 +18,7 @@ record(stringin, "$(P)$(Q)$(EPARAM):$(CHAN)")
     field(DTYP, "asynOctetRead")
     field(INP,  "@asyn($(PORT),0,0)PARAM,$(DPARAM),S,$(CHAN),0")
 	field(SCAN, "I/O Intr")
+	field(DESC, "$(DESC=$(DPARAM))")
 	info(archive, "VAL")
 }
 

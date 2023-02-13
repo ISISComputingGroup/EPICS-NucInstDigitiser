@@ -14,6 +14,14 @@ struct ParamData
     ParamData(const std::string& name_, asynParamType type_, int chan_, int log_freq_) : name(name_), type(type_), chan(chan_), log_freq(log_freq_) { }
 };
 
+class zmq_monitor_t : public zmq::monitor_t {
+public:
+    void on_event_connected(const zmq_event_t& event, const char* addr) override
+    {
+        std::cerr << "ZMQ: Connection from " << addr << std::endl;
+    }    
+};
+
 class NucInstDig : public ADDriver
 {
 public:
@@ -22,6 +30,7 @@ public:
  	static void pollerThreadC2(void* arg);
  	static void pollerThreadC3(void* arg);
  	static void pollerThreadC4(void* arg);
+    static void zmqMonitorPollerC(void* arg);
 
     // These are the methods that we override from asynPortDriver
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -39,13 +48,17 @@ private:
 
     zmq::context_t m_zmq_cmd_ctx;
     zmq::socket_t m_zmq_cmd_socket;
+    zmq_monitor_t m_zmq_cmd_mon;
     zmq::context_t m_zmq_stream_ctx;
     zmq::socket_t m_zmq_stream_socket;
+    zmq_monitor_t m_zmq_stream_mon;
     zmq::context_t m_zmq_events_ctx;
     zmq::socket_t m_zmq_events_socket;
+    zmq_monitor_t m_zmq_events_mon;
+    
     std::string m_targetAddress;
 
-    int P_startAcquisition; // int
+    int P_startAcquisition; // int, must be first createParam and in FIRST_NUCINSTDIG_PARAM
     int P_stopAcquisition; // int
     int P_DCSpecX[4]; // realarray
     int P_DCSpecY[4]; // realarray
@@ -71,6 +84,7 @@ private:
     void updateTraces();
     void updateEvents();
     void updateDCSpectra();
+    void zmqMonitorPoller();
     void execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2, rapidjson::Document& doc_recv);
 	void executeCmd(const std::string& name, const std::string& args = "");
     void getParameter(const std::string& name, rapidjson::Value& value, int idx = 0);

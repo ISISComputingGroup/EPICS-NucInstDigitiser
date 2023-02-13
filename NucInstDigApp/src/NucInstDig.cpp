@@ -316,91 +316,90 @@ void NucInstDig::setup()
 
 asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
-	int function = pasynUser->reason;
-	if (function < FIRST_NUCINSTDIG_PARAM)
-	{
-        return ADDriver::writeFloat64(pasynUser, value);
-	}
-    else
-    {
-        auto it = m_param_data.find(function);
-        if (it != m_param_data.end())
+    try {
+        int function = pasynUser->reason;
+        if (function < FIRST_NUCINSTDIG_PARAM)
         {
-            const ParamData* p = it->second;
-            setParameter(p->name, value, p->chan);
+            return ADDriver::writeFloat64(pasynUser, value);
         }
-    }    
-    asynStatus stat = asynSuccess;
-	if (stat == asynSuccess)
-	{
-		asynPortDriver::writeFloat64(pasynUser, value); // to update parameter and do callbacks
-	}
-	else
-	{
-		callParamCallbacks(); // this flushes P_ErrMsgs
-	}
-	return stat;
+        else
+        {
+            auto it = m_param_data.find(function);
+            if (it != m_param_data.end())
+            {
+                const ParamData* p = it->second;
+                setParameter(p->name, value, p->chan);
+            }
+        }    
+        asynStatus stat = asynSuccess;
+        if (stat == asynSuccess)
+        {
+            asynPortDriver::writeFloat64(pasynUser, value); // to update parameter and do callbacks
+        }
+        return stat;
+    }
+    catch(const std::exception& ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return asynError;
+    }
 }
 
 asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
     try {
-	int function = pasynUser->reason;
-	if (function < FIRST_NUCINSTDIG_PARAM)
-	{
-        return ADDriver::writeInt32(pasynUser, value);
-	}
-	asynStatus stat = asynSuccess;
-    if (function == P_startAcquisition) {
-        executeCmd("start_acquisition", "");
-    }
-    else if (function == P_stopAcquisition) {
-        executeCmd("stop_acquisition", "");
-    }
-    else if (function == P_resetDCSpectra) {
-        executeCmd("reset_darkcount_spectra", "");
-    }
-    else if (function == P_configDGTZ) {
-        executeCmd("configure_dgtz", "");
-    }
-    else if (function == P_configBASE) {
-        executeCmd("configure_base", "");
-    }
-    else if (function == P_configHV) {
-        executeCmd("configure_hv", "");
-    }
-    else if (function == P_configSTAVES) {
-        executeCmd("configure_staves", "");
-    }
-    else if (function == P_setup) {
-        setup();
-    }
-    else if (function >= P_DCSpecIdx[0] && function <= P_DCSpecIdx[3]) {
-        int idx = function - P_DCSpecIdx[0];
-        m_DCSpecIdx[idx] = value;
-    }
-    else if (function >= P_traceIdx[0] && function <= P_traceIdx[3]) {
-        int idx = function - P_traceIdx[0];
-        m_traceIdx[idx] = value;
-    }
-    else
-    {
-        auto it = m_param_data.find(function);
-        if (it != m_param_data.end())
+        int function = pasynUser->reason;
+        if (function < FIRST_NUCINSTDIG_PARAM)
         {
-            const ParamData* p = it->second;
-            setParameter(p->name, value, p->chan);
+            return ADDriver::writeInt32(pasynUser, value);
         }
-    }
-	if (stat == asynSuccess)
-	{
-		asynPortDriver::writeInt32(pasynUser, value); // to update parameter and do callbacks
-	}
-	else
-	{
-		callParamCallbacks(); // this flushes P_ErrMsgs
-	}
-	return stat;
+        asynStatus stat = asynSuccess;
+        if (function == P_startAcquisition) {
+            executeCmd("start_acquisition", "");
+        }
+        else if (function == P_stopAcquisition) {
+            executeCmd("stop_acquisition", "");
+        }
+        else if (function == P_resetDCSpectra) {
+            executeCmd("reset_darkcount_spectra", "");
+        }
+        else if (function == P_configDGTZ) {
+            executeCmd("configure_dgtz", "");
+        }
+        else if (function == P_configBASE) {
+            executeCmd("configure_base", "");
+        }
+        else if (function == P_configHV) {
+            executeCmd("configure_hv", "");
+        }
+        else if (function == P_configSTAVES) {
+            executeCmd("configure_staves", "");
+        }
+        else if (function == P_setup) {
+            setup();
+        }
+        else if (function >= P_DCSpecIdx[0] && function <= P_DCSpecIdx[3]) {
+            int idx = function - P_DCSpecIdx[0];
+            m_DCSpecIdx[idx] = value;
+        }
+        else if (function >= P_traceIdx[0] && function <= P_traceIdx[3]) {
+            int idx = function - P_traceIdx[0];
+            m_traceIdx[idx] = value;
+        }
+        else
+        {
+            auto it = m_param_data.find(function);
+            if (it != m_param_data.end())
+            {
+                const ParamData* p = it->second;
+                setParameter(p->name, value, p->chan);
+            }
+        }
+        if (stat == asynSuccess)
+        {
+            asynPortDriver::writeInt32(pasynUser, value); // to update parameter and do callbacks
+        }
+        return stat;
     }
     catch(const std::exception& ex)
     {
@@ -417,7 +416,7 @@ asynStatus NucInstDig::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value
 		return ADDriver::readFloat64Array(pasynUser, value, nElements, nIn);
 	}
     asynStatus stat = asynSuccess;
-	callParamCallbacks(); // this flushes P_ErrMsgs
+	callParamCallbacks();
 	doCallbacksFloat64Array(value, *nIn, function, 0);
     return stat;
 }
@@ -430,7 +429,7 @@ asynStatus NucInstDig::readInt32Array(asynUser *pasynUser, epicsInt32 *value, si
 		return ADDriver::readInt32Array(pasynUser, value, nElements, nIn);
 	}
     asynStatus stat = asynSuccess;
-	callParamCallbacks(); // this flushes P_ErrMsgs
+	callParamCallbacks();
 	doCallbacksInt32Array(value, *nIn, function, 0);
     return stat;
 }
@@ -855,10 +854,23 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
 {					
     const char *functionName = "NucInstDig";
     
+    m_zmq_events_mon.init(m_zmq_events_socket, "inproc://NucInstDigConMon", ZMQ_EVENT_CONNECTED);
+    m_zmq_cmd_mon.init(m_zmq_cmd_socket, "inproc://NucInstDigConMon", ZMQ_EVENT_CONNECTED);
+    m_zmq_stream_mon.init(m_zmq_stream_socket, "inproc://NucInstDigConMon", ZMQ_EVENT_CONNECTED);
+    if (epicsThreadCreate("zmqMonitorPoller",
+                          epicsThreadPriorityMedium,
+                          epicsThreadGetStackSize(epicsThreadStackMedium),
+                          (EPICSTHREADFUNC)zmqMonitorPollerC, this) == 0)
+    {
+        printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
+        return;
+    }
+
     m_zmq_events_socket.connect(std::string("tcp://") + targetAddress + ":5555");
     m_zmq_cmd_socket.connect(std::string("tcp://") + targetAddress + ":5557");
     m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
-    createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition); // must be first
+
+    createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition); // must be first as FIRST_NUCINSTDIG_PARAM
     createParam(P_stopAcquisitionString, asynParamInt32, &P_stopAcquisition);
     createParam(P_configDGTZString, asynParamInt32, &P_configDGTZ);    
     createParam(P_configBASEString, asynParamInt32, &P_configBASE);    
@@ -946,26 +958,35 @@ void NucInstDig::pollerThreadC4(void* arg)
 	}
 }
 
+void NucInstDig::zmqMonitorPollerC(void* arg)
+{
+    NucInstDig* driver = (NucInstDig*)arg;
+	if (driver != NULL)
+	{
+	    driver->zmqMonitorPoller();
+	}
+}
+
 void NucInstDig::pollerThread1()
 {
     static const char* functionName = "isisdaePoller1";
     unsigned long counter = 0;
-    rapidjson::Value value;
     while(true)
     {
         lock();
         try {
             for(const auto& kv : m_param_data)
             {
+                rapidjson::Value value;
                 const ParamData* p = kv.second;
                 getParameter(p->name, value, p->chan);
                 if (p->type == asynParamInt32)
                 {
-                    setIntegerParam(kv.first, value.GetInt());
+                    setIntegerParam(kv.first, (value.IsInt() ? value.GetInt() : atoi(value.GetString())));
                 }
                 else if (p->type == asynParamFloat64)
                 {
-                    setDoubleParam(kv.first, value.GetDouble());
+                    setDoubleParam(kv.first, (value.IsNumber() ? value.GetDouble() : atof(value.GetString())));
                 }
                 else if (p->type == asynParamOctet)
                 {
@@ -1001,6 +1022,17 @@ void NucInstDig::pollerThread4()
     updateDCSpectra();
 }
 
+void NucInstDig::zmqMonitorPoller()
+{
+    static const char* functionName = "zmqMonitorPoller";
+    while(true)
+    {
+        m_zmq_cmd_mon.check_event(100);
+        m_zmq_stream_mon.check_event(100);
+        m_zmq_events_mon.check_event(100);
+    }
+}
+
 /** Report status of the driver.
   * Prints details about the driver if details>0.
   * It then calls the ADDriver::report() method.
@@ -1021,7 +1053,6 @@ void NucInstDig::report(FILE *fp, int details)
     /* Invoke the base class method */
     ADDriver::report(fp, details);
 }
-
 
 asynStatus NucInstDig::drvUserCreate(asynUser *pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize)
 {

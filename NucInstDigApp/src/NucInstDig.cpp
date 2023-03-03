@@ -316,8 +316,12 @@ void NucInstDig::setup()
 
 asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
+    const char* functionName = "writeFloat64";
+    asynStatus stat = asynSuccess;
+    const char *paramName = NULL;
+    int function = pasynUser->reason;
+	getParamName(function, &paramName);
     try {
-        int function = pasynUser->reason;
         if (function < FIRST_NUCINSTDIG_PARAM)
         {
             return ADDriver::writeFloat64(pasynUser, value);
@@ -331,24 +335,29 @@ asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
                 setParameter(p->name, value, p->chan);
             }
         }    
-        asynStatus stat = asynSuccess;
         if (stat == asynSuccess)
         {
-            asynPortDriver::writeFloat64(pasynUser, value); // to update parameter and do callbacks
+            stat = asynPortDriver::writeFloat64(pasynUser, value); // to update parameter and do callbacks
         }
         return stat;
     }
     catch(const std::exception& ex)
     {
-        std::cerr << ex.what() << std::endl;
+        epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
+                  "%s:%s: status=%d, function=%d, name=%s, value=%f, error=%s", 
+                  driverName, functionName, stat, function, paramName, value, ex.what());
         return asynError;
     }
 }
 
 asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
+    const char* functionName = "writeInt32";
+    asynStatus stat = asynSuccess;
+    const char *paramName = NULL;
+    int function = pasynUser->reason;
+	getParamName(function, &paramName);
     try {
-        int function = pasynUser->reason;
         if (function < FIRST_NUCINSTDIG_PARAM)
         {
             return ADDriver::writeInt32(pasynUser, value);
@@ -397,13 +406,15 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         if (stat == asynSuccess)
         {
-            asynPortDriver::writeInt32(pasynUser, value); // to update parameter and do callbacks
+            stat = asynPortDriver::writeInt32(pasynUser, value); // to update parameter and do callbacks
         }
         return stat;
     }
     catch(const std::exception& ex)
     {
-        std::cerr << ex.what() << std::endl;
+        epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
+                  "%s:%s: status=%d, function=%d, name=%s, value=%d, error=%s", 
+                  driverName, functionName, stat, function, paramName, value, ex.what());
         return asynError;
     }
 }
@@ -456,7 +467,6 @@ asynStatus NucInstDig::readFloat64(asynUser *pasynUser, epicsFloat64 *value)
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
                   "%s:%s: function=%d, name=%s, error=%s", 
                   driverName, functionName, function, paramName, ex.what());
-		callParamCallbacks(); // this flushes P_ErrMsgs
 		return asynError;
 	}
 }
@@ -469,22 +479,23 @@ asynStatus NucInstDig::readInt32(asynUser *pasynUser, epicsInt32 *value)
 	getParamName(function, &paramName);
 	try
 	{
+		asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:%s: function=%d, name=%s, value=%d\n", 
+              driverName, functionName, function, paramName, *value);
 	    if (function < FIRST_NUCINSTDIG_PARAM)
 	    {
 	        return ADDriver::readInt32(pasynUser, value);
 	    }
-	    return asynPortDriver::readInt32(pasynUser, value);
-		asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
-              "%s:%s: function=%d, name=%s, value=%d\n", 
-              driverName, functionName, function, paramName, *value);
-		return asynSuccess;
+        else
+        {
+	        return asynPortDriver::readInt32(pasynUser, value);
+        }
 	}
 	catch(const std::exception& ex)
 	{
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
                   "%s:%s: function=%d, name=%s, error=%s", 
                   driverName, functionName, function, paramName, ex.what());
-		callParamCallbacks(); // this flushes P_ErrMsgs
 		return asynError;
 	}
 }
@@ -513,7 +524,6 @@ asynStatus NucInstDig::readOctet(asynUser *pasynUser, char *value, size_t maxCha
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
                   "%s:%s: status=%d, function=%d, name=%s, value=\"%s\", error=%s", 
                   driverName, functionName, status, function, paramName, value_s.c_str(), ex.what());
-		callParamCallbacks(); // this flushes P_ErrMsgs
 		*nActual = 0;
 		if (eomReason) { *eomReason = ASYN_EOM_END; }
 		value[0] = '\0';
@@ -568,7 +578,6 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
                   "%s:%s: status=%d, function=%d, name=%s, value=%s, error=%s", 
                   driverName, functionName, status, function, paramName, value_s.c_str(), ex.what());
-		callParamCallbacks(); // this flushes P_ErrMsgs
 		*nActual = 0;
 		return asynError;
 	}
@@ -577,7 +586,6 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
                   "%s:%s: status=%d, function=%d, name=%s, value=%s, error=unknow exception", 
                   driverName, functionName, status, function, paramName, value_s.c_str());
-		callParamCallbacks(); // this flushes P_ErrMsgs
 		*nActual = 0;
 		return asynError;
 	}
@@ -623,7 +631,12 @@ void NucInstDig::updateTraces()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << ex.what() << std::endl;
+            std::cerr << "updaetTraces " << ex.what() << std::endl;
+            epicsThreadSleep(3.0);            
+        }
+        catch(...)
+        {
+            std::cerr << "update traces exception"  << std::endl;
             epicsThreadSleep(3.0);            
         }
     }
@@ -663,7 +676,12 @@ void NucInstDig::updateDCSpectra()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << ex.what() << std::endl;
+            std::cerr << "update dc spectra " << ex.what() << std::endl;
+            epicsThreadSleep(3.0);            
+        }
+        catch(...)
+        {
+            std::cerr << "update dc spectra exception"  << std::endl;
             epicsThreadSleep(3.0);            
         }
     }
@@ -699,11 +717,14 @@ void NucInstDig::updateEvents()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << ex.what() << std::endl;
+            std::cerr << "update events " << ex.what() << std::endl;
             epicsThreadSleep(3.0);            
         }
-
-        
+        catch(...)
+        {
+            std::cerr << "update events exception"  << std::endl;
+            epicsThreadSleep(3.0);            
+        }
     }
 }
 
@@ -853,10 +874,10 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_dig_idx(dig_idx)
 {					
     const char *functionName = "NucInstDig";
-    
-    m_zmq_events_mon.init(m_zmq_events_socket, "inproc://NucInstDigConMon", ZMQ_EVENT_CONNECTED);
-    m_zmq_cmd_mon.init(m_zmq_cmd_socket, "inproc://NucInstDigConMon", ZMQ_EVENT_CONNECTED);
-    m_zmq_stream_mon.init(m_zmq_stream_socket, "inproc://NucInstDigConMon", ZMQ_EVENT_CONNECTED);
+    int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
+    m_zmq_events_mon.init(m_zmq_events_socket, "inproc://NucInstDigConMon", events_to_monitor);
+    m_zmq_cmd_mon.init(m_zmq_cmd_socket, "inproc://NucInstDigConMon", events_to_monitor);
+    m_zmq_stream_mon.init(m_zmq_stream_socket, "inproc://NucInstDigConMon", events_to_monitor);
     if (epicsThreadCreate("zmqMonitorPoller",
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
@@ -974,7 +995,8 @@ void NucInstDig::pollerThread1()
     while(true)
     {
         lock();
-        try {
+        try
+        {
             for(const auto& kv : m_param_data)
             {
                 rapidjson::Value value;
@@ -992,15 +1014,25 @@ void NucInstDig::pollerThread1()
                 {
                     setStringParam(kv.first, value.GetString());
                 }
+                else
+                {
+                    std::cerr << "pollerThread1: invalid type " << p->type << " for " << p->name << std::endl;
+                }
             }
             callParamCallbacks();
         }
+        catch(const std::exception& ex)
+        {
+            std::cerr << "pollerThread1: exception " << ex.what() << std::endl;
+            epicsThreadSleep(3.0);
+        }
         catch(...)
         {
-            ;
+            std::cerr << "pollerThread1: exception " << std::endl;
+            epicsThreadSleep(3.0);
         }
         unlock();
-        epicsThreadSleep(1.0);
+        epicsThreadSleep(3.0);
     }
 }
 
@@ -1030,6 +1062,7 @@ void NucInstDig::zmqMonitorPoller()
         m_zmq_cmd_mon.check_event(100);
         m_zmq_stream_mon.check_event(100);
         m_zmq_events_mon.check_event(100);
+        epicsThreadSleep(0.5);
     }
 }
 

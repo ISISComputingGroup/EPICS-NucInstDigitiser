@@ -19,7 +19,28 @@ public:
     void on_event_connected(const zmq_event_t& event, const char* addr) override
     {
         std::cerr << "ZMQ: Connection from " << addr << std::endl;
-    }    
+    }
+    void on_event_disconnected(const zmq_event_t & event, const char* addr) override
+    {
+        std::cerr << "ZMQ: Disconnect from " << addr << std::endl;
+    }        
+    void on_event_closed(const zmq_event_t& event, const char* addr) override
+    {
+        std::cerr << "ZMQ: Closed from " << addr << std::endl;
+    }        
+    void on_event_bind_failed(const zmq_event_t& event, const char* addr) override
+    {
+        std::cerr << "ZMQ: Bind failed from " << addr << std::endl;
+    }        
+    void on_event_connect_retried(const zmq_event_t& event, const char* addr) override
+    {
+        std::cerr << "ZMQ: Connect retried from " << addr << std::endl;
+    }        
+    void on_event_connect_delayed(const zmq_event_t& event, const char* addr) override
+    {
+        std::cerr << "ZMQ: Connect delayed from " << addr << std::endl;
+    }        
+		    
 };
 
 class NucInstDig : public ADDriver

@@ -3,8 +3,6 @@
  
 #include "ADDriver.h"
 
-typedef std::vector< std::vector<double> > Vector2D;
-
 struct ParamData
 {
     std::string name;
@@ -51,6 +49,7 @@ public:
  	static void pollerThreadC2(void* arg);
  	static void pollerThreadC3(void* arg);
  	static void pollerThreadC4(void* arg);
+ 	static void pollerThreadC5(void* arg);
     static void zmqMonitorPollerC(void* arg);
 
     // These are the methods that we override from asynPortDriver
@@ -64,6 +63,7 @@ public:
     virtual asynStatus readInt32Array(asynUser *pasynUser, epicsInt32 *value, size_t nElements, size_t *nIn);
 	
     virtual void report(FILE *fp, int details);
+    virtual void setShutter(int addr, int open);
 
 private:
 
@@ -79,8 +79,7 @@ private:
     
     std::string m_targetAddress;
 
-    int P_startAcquisition; // int, must be first createParam and in FIRST_NUCINSTDIG_PARAM
-    int P_stopAcquisition; // int
+    int P_setup; // int, must be first createParam and in FIRST_NUCINSTDIG_PARAM
     int P_DCSpecX[4]; // realarray
     int P_DCSpecY[4]; // realarray
     int P_DCSpecIdx[4]; // int
@@ -89,7 +88,6 @@ private:
     int P_traceIdx[4]; // int
     int P_readDCSpectra; // int
     int P_readEvents; // int
-    int P_setup; // int
     int P_configDGTZ; // int
     int P_configBASE; // int
     int P_configHV; // int
@@ -98,13 +96,27 @@ private:
     
     std::map<int, ParamData*> m_param_data;
     
-	#define FIRST_NUCINSTDIG_PARAM P_startAcquisition
+	#define FIRST_NUCINSTDIG_PARAM P_setup
 	#define LAST_NUCINSTDIG_PARAM P_resetDCSpectra
 
+    NDArray* m_pTraces;
+    NDArray* m_pDCSpectra;
     NDArray* m_pRaw;
+    
+    epicsMutex m_dcLock;
+    epicsMutex m_tracesLock;
+    
+    std::vector<double> m_traces;
+    std::vector<double> m_dcSpectra;
+    size_t m_NTRACE;
+    size_t m_nDCSpec;
+    size_t m_nDCPts;
+    size_t m_nVoltage;
+    
     void updateTraces();
     void updateEvents();
     void updateDCSpectra();
+    void updateAD();
     void zmqMonitorPoller();
     void execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2, rapidjson::Document& doc_recv);
 	void executeCmd(const std::string& name, const std::string& args = "");
@@ -125,7 +137,13 @@ private:
 	void pollerThread2();
 	void pollerThread3();
 	void pollerThread4();
-    void readData2d(const std::string& name, const std::string& args, Vector2D& dataOut);
+	void pollerThread5();
+    void readData2d(const std::string& name, const std::string& args, std::vector<double>& dataOut, size_t& nspec, size_t& npts);
+    void setADAcquire(int acquire);
+    int computeImage(int addr, const std::vector<double>& data, int nx, int ny);
+    template <typename epicsType> 
+         int computeArray(int addr, const std::vector<double>& data, int maxSizeX, int maxSizeY);
+
     
     std::vector<double> m_traceX[4];
     std::vector<double> m_traceY[4];
@@ -137,8 +155,6 @@ private:
     int m_dig_idx;
 };
 
-#define P_startAcquisitionString	"START"
-#define P_stopAcquisitionString	    "STOP"
 #define P_setupString	            "SETUP"
 #define P_configDGTZString          "CONFIG_DGTZ" 
 #define P_configBASEString          "CONFIG_BASE" 

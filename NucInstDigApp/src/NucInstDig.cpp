@@ -47,6 +47,52 @@ static epicsThreadOnceId onceId = EPICS_THREAD_ONCE_INIT;
 
 static const char *driverName="NucInstDig";
 
+void NucInstDig::setADAcquire(int acquire)
+{
+    int adstatus;
+    int acquiring;
+    int imageMode;
+    asynStatus status = asynSuccess;
+
+    /* Ensure that ADStatus is set correctly before we set ADAcquire.*/
+	for(int i=0; i<maxAddr; ++i)
+	{
+		getIntegerParam(i, ADStatus, &adstatus);
+		getIntegerParam(i, ADAcquire, &acquiring);
+		getIntegerParam(i, ADImageMode, &imageMode);
+		  if (acquire && !acquiring) {
+			setStringParam(i, ADStatusMessage, "Acquiring data");
+			setIntegerParam(i, ADStatus, ADStatusAcquire); 
+			setIntegerParam(i, ADAcquire, 1); 
+            setIntegerParam(ADNumImagesCounter, 0);
+		  }
+		  if (!acquire && acquiring) {
+			setIntegerParam(i, ADAcquire, 0); 
+			setStringParam(i, ADStatusMessage, "Acquisition stopped");
+			if (imageMode == ADImageContinuous) {
+			  setIntegerParam(i, ADStatus, ADStatusIdle);
+			} else {
+			  setIntegerParam(i, ADStatus, ADStatusAborted);
+			}
+		  }
+	}
+}
+
+void NucInstDig::setShutter(int addr, int open)
+{
+    int shutterMode;
+
+    getIntegerParam(addr, ADShutterMode, &shutterMode);
+    if (shutterMode == ADShutterModeDetector) {
+        /* Simulate a shutter by just changing the status readback */
+        setIntegerParam(addr, ADShutterStatus, open);
+    } else {
+        /* For no shutter or EPICS shutter call the base class method */
+        ADDriver::setShutter(open);
+    }
+}
+
+
 void NucInstDig::setup()
 {
       rapidjson::Value value;  
@@ -358,18 +404,25 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
     int function = pasynUser->reason;
 	getParamName(function, &paramName);
     try {
+        if (function == ADAcquire)
+        {            
+            setADAcquire(value);
+            if (value != 0)
+            {
+                executeCmd("start_acquisition", "");
+            }
+            else
+            {
+                executeCmd("stop_acquisition", "");
+            }
+            return ADDriver::writeInt32(pasynUser, value);
+        }
         if (function < FIRST_NUCINSTDIG_PARAM)
         {
             return ADDriver::writeInt32(pasynUser, value);
         }
         asynStatus stat = asynSuccess;
-        if (function == P_startAcquisition) {
-            executeCmd("start_acquisition", "");
-        }
-        else if (function == P_stopAcquisition) {
-            executeCmd("stop_acquisition", "");
-        }
-        else if (function == P_resetDCSpectra) {
+        if (function == P_resetDCSpectra) {
             executeCmd("reset_darkcount_spectra", "");
         }
         else if (function == P_configDGTZ) {
@@ -605,14 +658,24 @@ void NucInstDig::updateTraces()
         auto channels = msg->channels();
         for(int i=0; i<channels->size(); ++i) {
             int chan = channels->Get(i)->channel();
+            auto voltages = channels->Get(i)->voltage();
+            {
+                epicsGuard<epicsMutex> _lock(m_tracesLock);
+                m_nVoltage = voltages->size();
+                m_traces.resize(m_NTRACE * m_nVoltage);
+                if (chan < m_NTRACE) {
+                    for(int k=0; k<m_nVoltage; ++k) {
+                        m_traces[chan * m_nVoltage + k] = voltages->Get(k);
+                    }
+                }
+            }
             for(size_t j=0; j<4; ++j) {
                 if (chan == m_traceIdx[j]) {
-                    int nvoltage = channels->Get(i)->voltage()->size();
-                    m_traceX[j].resize(nvoltage);
-                    m_traceY[j].resize(nvoltage);
-                    for(int k=0; k<nvoltage; ++k) {
-                        m_traceX[j][k] = k;
-                        m_traceY[j][k] = channels->Get(i)->voltage()->Get(k);
+                    m_traceX[j].resize(m_nVoltage);
+                    m_traceY[j].resize(m_nVoltage);
+                    for(int k=0; k<m_nVoltage; ++k) {
+                       m_traceX[j][k] = k;
+                       m_traceY[j][k] = m_traces[chan * m_nVoltage + k];
                     }
                 }
             }
@@ -641,10 +704,447 @@ void NucInstDig::updateTraces()
         }
     }
 }
+
+
+void NucInstDig::updateAD()
+{
+    static const char* functionName = "isisdaePoller4";
+	int acquiring, enable, data_mode;
+	int all_acquiring, all_enable;
+    int status = asynSuccess;
+    int imageCounter;
+    int numImages, numImagesCounter;
+    int imageMode;
+    int arrayCallbacks;
+    NDArray *pImage;
+    double acquireTime, acquirePeriod, delay, updateTime;
+    epicsTimeStamp startTime, endTime;
+    double elapsedTime, maxval;
+    std::vector<int> old_acquiring(maxAddr, 0);
+	std::vector<epicsTimeStamp> last_update(maxAddr);
+
+	memset(&(last_update[0]), 0, maxAddr * sizeof(epicsTimeStamp));	
+	while(true)
+	{
+		all_acquiring = all_enable = 0;
+		for(int i=0; i<maxAddr; ++i)
+		{
+		    epicsGuard<NucInstDig> _lock(*this);
+			try 
+			{
+				acquiring = enable = 0;
+				getIntegerParam(i, ADAcquire, &acquiring);
+				getDoubleParam(i, ADAcquirePeriod, &acquirePeriod);
+				
+				all_acquiring |= acquiring;
+				all_enable |= enable;
+				if (acquiring == 0 || enable == 0)
+				{
+					old_acquiring[i] = acquiring;
+	//				epicsThreadSleep( acquirePeriod );
+					continue;
+				}
+				if (old_acquiring[i] == 0)
+				{
+					setIntegerParam(i, ADNumImagesCounter, 0);
+					old_acquiring[i] = acquiring;
+				}
+				setIntegerParam(i, ADStatus, ADStatusAcquire); 
+				epicsTimeGetCurrent(&startTime);
+				getIntegerParam(i, ADImageMode, &imageMode);
+
+				/* Get the exposure parameters */
+				getDoubleParam(i, ADAcquireTime, &acquireTime);  // not really used
+
+				setShutter(i, ADShutterOpen);
+				callParamCallbacks(i, i);
+				
+				/* Update the image */
+                if (i == 0) {
+                    epicsGuard<epicsMutex> _lock(m_dcLock);
+				    status = computeImage(i, m_dcSpectra, m_nDCPts, m_nDCSpec);
+                }
+                else if (i == 1) {
+                    epicsGuard<epicsMutex> _lock(m_tracesLock);
+				    status = computeImage(i, m_traces, m_nVoltage, m_NTRACE);
+                }
+
+	//            if (status) continue;
+
+				// could sleep to make up to acquireTime
+			
+				/* Close the shutter */
+				setShutter(i, ADShutterClosed);
+			
+				setIntegerParam(i, ADStatus, ADStatusReadout);
+				/* Call the callbacks to update any changes */
+				callParamCallbacks(i, i);
+
+				pImage = this->pArrays[i];
+				if (pImage == NULL)
+				{
+					continue;
+				}
+
+				/* Get the current parameters */
+				getIntegerParam(i, NDArrayCounter, &imageCounter);
+				getIntegerParam(i, ADNumImages, &numImages);
+				getIntegerParam(i, ADNumImagesCounter, &numImagesCounter);
+				getIntegerParam(i, NDArrayCallbacks, &arrayCallbacks);
+				++imageCounter;
+				++numImagesCounter;
+				setIntegerParam(i, NDArrayCounter, imageCounter);
+				setIntegerParam(i, ADNumImagesCounter, numImagesCounter);
+
+				/* Put the frame number and time stamp into the buffer */
+				pImage->uniqueId = imageCounter;
+				pImage->timeStamp = startTime.secPastEpoch + startTime.nsec / 1.e9;
+				updateTimeStamp(&pImage->epicsTS);
+
+				/* Get any attributes that have been defined for this driver */
+				this->getAttributes(pImage->pAttributeList);
+
+				if (arrayCallbacks) {
+				  /* Call the NDArray callback */
+				  /* Must release the lock here, or we can get into a deadlock, because we can
+				   * block on the plugin lock, and the plugin can be calling us */
+				  epicsGuardRelease<NucInstDig> _unlock(_lock);
+				  asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
+						"%s:%s: calling imageData callback addr %d\n", driverName, functionName, i);
+				  doCallbacksGenericPointer(pImage, NDArrayData, i);
+				}
+				epicsTimeGetCurrent(&endTime);
+				elapsedTime = epicsTimeDiffInSeconds(&endTime, &startTime);
+				updateTime = epicsTimeDiffInSeconds(&endTime, &(last_update[i]));
+				last_update[i] = endTime;
+				/* Call the callbacks to update any changes */
+				callParamCallbacks(i, i);
+				/* sleep for the acquire period minus elapsed time. */
+				delay = acquirePeriod - elapsedTime;
+				asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
+						"%s:%s: delay=%f\n",
+						driverName, functionName, delay);
+				if (delay >= 0.0) {
+					/* We set the status to waiting to indicate we are in the period delay */
+					setIntegerParam(i, ADStatus, ADStatusWaiting);
+					callParamCallbacks(i, i);
+					{
+						epicsGuardRelease<NucInstDig> _unlock(_lock);
+						epicsThreadSleep(delay);
+					}
+					setIntegerParam(i, ADStatus, ADStatusIdle);
+					callParamCallbacks(i, i);  
+				}
+			}
+			catch(...)
+			{
+				std::cerr << "Exception in pollerThread4" << std::endl;
+			}
+        }
+		if (all_enable == 0 || all_acquiring == 0)
+		{
+			epicsThreadSleep(1.0);
+		}
+		else
+		{
+			epicsThreadSleep(1.0);
+		}
+	}
+}
+
+/** Computes the new image data */
+int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, int ny)
+{
+    int status = asynSuccess;
+    NDDataType_t dataType;
+    int itemp, period;
+    int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY;
+    int xDim=0, yDim=1, colorDim=-1;
+    int resetImage;
+    int spec_start, trans_mode, maxSizeX, maxSizeY;
+    int colorMode;
+    int ndims=0;
+    NDDimension_t dimsOut[3];
+    size_t dims[3];
+    NDArrayInfo_t arrayInfo;
+    NDArray *pImage;
+    const char* functionName = "computeImage";
+
+    /* NOTE: The caller of this function must have taken the mutex */
+
+    status |= getIntegerParam(addr, ADBinX,         &binX);
+    status |= getIntegerParam(addr, ADBinY,         &binY);
+    status |= getIntegerParam(addr, ADMinX,         &minX);
+    status |= getIntegerParam(addr, ADMinY,         &minY);
+    status |= getIntegerParam(addr, ADSizeX,        &sizeX);
+    status |= getIntegerParam(addr, ADSizeY,        &sizeY);
+    status |= getIntegerParam(addr, ADReverseX,     &reverseX);
+    status |= getIntegerParam(addr, ADReverseY,     &reverseY);
+    status |= getIntegerParam(addr, ADMaxSizeX,     &maxSizeX);
+    status |= getIntegerParam(addr, ADMaxSizeY,     &maxSizeY);
+    status |= getIntegerParam(addr, NDColorMode,    &colorMode);
+    status |= getIntegerParam(addr, NDDataType,     &itemp); 
+	dataType = (NDDataType_t)itemp;
+	if (status)
+	{
+		asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+			"%s:%s: error getting parameters\n",
+			driverName, functionName);
+		return (status);
+	}
+    if (maxSizeX != nx)
+    {
+        maxSizeX = nx;
+        status |= setIntegerParam(addr, ADMaxSizeX, maxSizeX);
+    }
+    if (sizeX != nx)
+    {
+        sizeX = nx;
+        status |= setIntegerParam(addr, ADSizeX, sizeX);
+    }
+    if (maxSizeY != ny)
+    {
+        maxSizeY = ny;
+        status |= setIntegerParam(addr, ADMaxSizeY, maxSizeY);
+    }
+    if (sizeY != ny)
+    {
+        sizeY = ny;
+        status |= setIntegerParam(addr, ADSizeY, sizeY);
+    }
+
+    /* Make sure parameters are consistent, fix them if they are not */
+    if (binX < 1) {
+        binX = 1;
+        status |= setIntegerParam(addr, ADBinX, binX);
+    }
+    if (binY < 1) {
+        binY = 1;
+        status |= setIntegerParam(addr, ADBinY, binY);
+    }
+    if (minX < 0) {
+        minX = 0;
+        status |= setIntegerParam(addr, ADMinX, minX);
+    }
+    if (minY < 0) {
+        minY = 0;
+        status |= setIntegerParam(addr, ADMinY, minY);
+    }
+    if (minX > maxSizeX-1) {
+        minX = maxSizeX-1;
+        status |= setIntegerParam(addr, ADMinX, minX);
+    }
+    if (minY > maxSizeY-1) {
+        minY = maxSizeY-1;
+        status |= setIntegerParam(addr, ADMinY, minY);
+    }
+    if (minX+sizeX > maxSizeX) {
+        sizeX = maxSizeX-minX;
+        status |= setIntegerParam(addr, ADSizeX, sizeX);
+    }
+    if (minY+sizeY > maxSizeY) {
+        sizeY = maxSizeY-minY;
+        status |= setIntegerParam(addr, ADSizeY, sizeY);
+    }
+
+	if (status)
+	{
+		asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+			"%s:%s: error setting parameters\n",
+			driverName, functionName);
+		return (status);
+	}
+
+    switch (colorMode) {
+        case NDColorModeMono:
+            ndims = 2;
+            xDim = 0;
+            yDim = 1;
+            break;
+        case NDColorModeRGB1:
+            ndims = 3;
+            colorDim = 0;
+            xDim     = 1;
+            yDim     = 2;
+            break;
+        case NDColorModeRGB2:
+            ndims = 3;
+            colorDim = 1;
+            xDim     = 0;
+            yDim     = 2;
+            break;
+        case NDColorModeRGB3:
+            ndims = 3;
+            colorDim = 2;
+            xDim     = 0;
+            yDim     = 1;
+            break;
+    }
+
+// we could be more efficient
+//    if (resetImage) {
+    /* Free the previous raw buffer */
+        if (m_pRaw) m_pRaw->release();
+        /* Allocate the raw buffer we use to compute images. */
+        dims[xDim] = maxSizeX;
+        dims[yDim] = maxSizeY;
+        if (ndims > 2) dims[colorDim] = 3;
+        m_pRaw = this->pNDArrayPool->alloc(ndims, dims, dataType, 0, NULL);
+
+        if (!m_pRaw) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                      "%s:%s: error allocating raw buffer\n",
+                      driverName, functionName);
+            return(status);
+        }
+//    }
+
+    switch (dataType) {
+        case NDInt8:
+            status |= computeArray<epicsInt8>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDUInt8:
+            status |= computeArray<epicsUInt8>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDInt16:
+            status |= computeArray<epicsInt16>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDUInt16:
+            status |= computeArray<epicsUInt16>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDInt32:
+            status |= computeArray<epicsInt32>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDUInt32:
+            status |= computeArray<epicsUInt32>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDInt64:
+            status |= computeArray<epicsInt64>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDUInt64:
+            status |= computeArray<epicsUInt64>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDFloat32:
+            status |= computeArray<epicsFloat32>(addr, data, maxSizeX, maxSizeY);
+            break;
+        case NDFloat64:
+            status |= computeArray<epicsFloat64>(addr, data, maxSizeX, maxSizeY);
+            break;
+    }
+
+    /* Extract the region of interest with binning.
+     * If the entire image is being used (no ROI or binning) that's OK because
+     * convertImage detects that case and is very efficient */
+    m_pRaw->initDimension(&dimsOut[xDim], sizeX);
+    m_pRaw->initDimension(&dimsOut[yDim], sizeY);
+    if (ndims > 2) m_pRaw->initDimension(&dimsOut[colorDim], 3);
+    dimsOut[xDim].binning = binX;
+    dimsOut[xDim].offset  = minX;
+    dimsOut[xDim].reverse = reverseX;
+    dimsOut[yDim].binning = binY;
+    dimsOut[yDim].offset  = minY;
+    dimsOut[yDim].reverse = reverseY;
+
+    /* We save the most recent image buffer so it can be used in the read() function.
+     * Now release it before getting a new version. */	 
+    if (this->pArrays[addr]) this->pArrays[addr]->release();
+    status = this->pNDArrayPool->convert(m_pRaw,
+                                         &this->pArrays[addr],
+                                         dataType,
+                                         dimsOut);
+    if (status) {
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                    "%s:%s: error allocating buffer in convert()\n",
+                    driverName, functionName);
+        return(status);
+    }
+    pImage = this->pArrays[addr];
+    pImage->getInfo(&arrayInfo);
+    status = asynSuccess;
+    status |= setIntegerParam(addr, NDArraySize,  (int)arrayInfo.totalBytes);
+    status |= setIntegerParam(addr, NDArraySizeX, (int)pImage->dims[xDim].size);
+    status |= setIntegerParam(addr, NDArraySizeY, (int)pImage->dims[yDim].size);
+    if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                    "%s:%s: error setting parameters\n",
+                    driverName, functionName);
+    return(status);
+}
+
+
+
+// supplied array of x,y,t
+template <typename epicsType> 
+int NucInstDig::computeArray(int addr, const std::vector<double>& data, int sizeX, int sizeY)
+{
+    epicsType *pMono=NULL, *pRed=NULL, *pGreen=NULL, *pBlue=NULL;
+    int columnStep=0, rowStep=0, colorMode;
+    int status = asynSuccess;
+    double exposureTime, gain;
+    int i, j, k;
+
+    status = getDoubleParam (ADGain,        &gain);
+    status = getIntegerParam(NDColorMode,   &colorMode);
+    status = getDoubleParam (ADAcquireTime, &exposureTime);
+
+    switch (colorMode) {
+        case NDColorModeMono:
+            pMono = (epicsType *)m_pRaw->pData;
+            break;
+        case NDColorModeRGB1:
+            columnStep = 3;
+            rowStep = 0;
+            pRed   = (epicsType *)m_pRaw->pData;
+            pGreen = (epicsType *)m_pRaw->pData+1;
+            pBlue  = (epicsType *)m_pRaw->pData+2;
+            break;
+        case NDColorModeRGB2:
+            columnStep = 1;
+            rowStep = 2 * sizeX;
+            pRed   = (epicsType *)m_pRaw->pData;
+            pGreen = (epicsType *)m_pRaw->pData + sizeX;
+            pBlue  = (epicsType *)m_pRaw->pData + 2*sizeX;
+            break;
+        case NDColorModeRGB3:
+            columnStep = 1;
+            rowStep = 0;
+            pRed   = (epicsType *)m_pRaw->pData;
+            pGreen = (epicsType *)m_pRaw->pData + sizeX*sizeY;
+            pBlue  = (epicsType *)m_pRaw->pData + 2*sizeX*sizeY;
+            break;
+    }
+    m_pRaw->pAttributeList->add("ColorMode", "Color mode", NDAttrInt32, &colorMode);
+	memset(m_pRaw->pData, 0, m_pRaw->dataSize);
+    k = 0;
+	for (i=0; i<sizeY; i++) {
+		switch (colorMode) {
+			case NDColorModeMono:
+				for (j=0; j<sizeX; j++) {
+					pMono[k] = static_cast<epicsType>(gain * data[k]);
+					++k;
+				}
+				break;
+			case NDColorModeRGB1:
+			case NDColorModeRGB2:
+			case NDColorModeRGB3:
+				for (j=0; j<sizeX; j++) {
+					pRed[k] = pGreen[k] = pBlue[k] = static_cast<epicsType>(gain * data[k]);
+					pRed   += columnStep;
+					pGreen += columnStep;
+					pBlue  += columnStep;
+					++k;
+				}
+				pRed   += rowStep;
+				pGreen += rowStep;
+				pBlue  += rowStep;
+				break;
+		}
+	}
+    return(status);
+}
+
     
 void NucInstDig::updateDCSpectra()
 {
-    Vector2D dcSpectra;
     while(true)
     {
         int read_spectra = 0;
@@ -656,23 +1156,25 @@ void NucInstDig::updateDCSpectra()
             continue;
         }
         try {
-        readData2d("get_darkcount_spectra", "", dcSpectra);
-        for(size_t j=0; j<4; ++j) {
-            int idx = m_DCSpecIdx[j];
-            if (idx >= 0 && idx < dcSpectra.size()) {
-                int npts = dcSpectra[idx].size();
-                m_DCSpecX[j].resize(npts);
-                m_DCSpecY[j].resize(npts);
-                for(int k=0; k<npts; ++k) {
-                    m_DCSpecX[j][k] = k;
-                    m_DCSpecY[j][k] = dcSpectra[idx][k];
-                }
-                lock();
-                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecX[j].data()), m_DCSpecX[j].size(), P_DCSpecX[j], 0);
-                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecY[j].data()), m_DCSpecY[j].size(), P_DCSpecY[j], 0);
-                unlock();
+            {
+                epicsGuard<epicsMutex> _lock(m_dcLock);
+                readData2d("get_darkcount_spectra", "", m_dcSpectra, m_nDCSpec, m_nDCPts);
             }
-        }
+            for(size_t j=0; j<4; ++j) {
+                int idx = m_DCSpecIdx[j];
+                if (idx >= 0 && idx < m_nDCSpec) {
+                    m_DCSpecX[j].resize(m_nDCPts);
+                    m_DCSpecY[j].resize(m_nDCPts);
+                    for(int k=0; k<m_nDCPts; ++k) {
+                        m_DCSpecX[j][k] = k;
+                        m_DCSpecY[j][k] = m_dcSpectra[idx * m_nDCPts + k];
+                    }
+                    lock();
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecX[j].data()), m_DCSpecX[j].size(), P_DCSpecX[j], 0);
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecY[j].data()), m_DCSpecY[j].size(), P_DCSpecY[j], 0);
+                    unlock();
+                }
+            }
         }
         catch(const std::exception& ex)
         {
@@ -734,21 +1236,25 @@ void NucInstDig::executeCmd(const std::string& name, const std::string& args)
     execute("execute_cmd", name, args, "", doc_recv);    
 }
 
-void NucInstDig::readData2d(const std::string& name, const std::string& args, Vector2D& dataOut)
+void NucInstDig::readData2d(const std::string& name, const std::string& args, std::vector<double>& dataOut, size_t& nspec, size_t& npts)
 {
     rapidjson::Document doc_recv;
+    dataOut.resize(0);
+    nspec = npts = 0;
     execute("execute_read_command", name, args, "", doc_recv);
     const rapidjson::Value& data = doc_recv["data"];
     if (data.IsArray())
     {
-        dataOut.resize(data.Size());
-        for (rapidjson::SizeType i = 0; i < data.Size(); ++i)
+        nspec = data.Size();
+        const rapidjson::Value& spec0 = data[0];
+        npts = spec0.Size();
+        dataOut.resize(nspec * npts);
+        for (rapidjson::SizeType i = 0; i < nspec; ++i)
         {
             const rapidjson::Value& spec = data[i];
-            dataOut[i].resize(spec.Size());
             for (rapidjson::SizeType j = 0; j < spec.Size(); ++j)
             {
-                dataOut[i][j] = spec[j].GetDouble();
+                dataOut[i * npts + j] = spec[j].GetDouble();
             }
         }
     }
@@ -858,7 +1364,7 @@ void NucInstDig::createNParams(const char* name, asynParamType type, int* param,
 /// \param[in] dcomint DCOM interface pointer created by lvDCOMConfigure()
 /// \param[in] portName @copydoc initArg0
 NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_idx)
-   : ADDriver(portName, 1, 100,
+   : ADDriver(portName, 2, 100,
 					0, // maxBuffers
 					0, // maxMemory
                     asynInt32Mask | asynInt32ArrayMask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
@@ -867,11 +1373,11 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                     1, /* Autoconnect */
                     0, /* Default priority */
                     0),	/* Default stack size*/
-					 m_pRaw(NULL),
                      m_zmq_events_ctx{1}, m_zmq_events_socket(m_zmq_events_ctx, zmq::socket_type::pull),
                      m_zmq_cmd_ctx{1}, m_zmq_cmd_socket(m_zmq_cmd_ctx, zmq::socket_type::req),
                      m_zmq_stream_ctx{1}, m_zmq_stream_socket(m_zmq_stream_ctx, zmq::socket_type::pull),
-                     m_dig_idx(dig_idx)
+                     m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pRaw(NULL),
+                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(16)
 {					
     const char *functionName = "NucInstDig";
     int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
@@ -891,8 +1397,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     m_zmq_cmd_socket.connect(std::string("tcp://") + targetAddress + ":5557");
     m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
 
-    createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition); // must be first as FIRST_NUCINSTDIG_PARAM
-    createParam(P_stopAcquisitionString, asynParamInt32, &P_stopAcquisition);
+    createParam(P_setupString, asynParamInt32, &P_setup);  // must be first as FIRST_NUCINSTDIG_PARAM
     createParam(P_configDGTZString, asynParamInt32, &P_configDGTZ);    
     createParam(P_configBASEString, asynParamInt32, &P_configBASE);    
     createParam(P_configHVString, asynParamInt32, &P_configHV);    
@@ -905,8 +1410,43 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     createNParams(P_traceIdxString, asynParamInt32, P_traceIdx, 4);
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
-    createParam(P_setupString, asynParamInt32, &P_setup);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
+    
+	int maxSizes[2][2] = { {16, 20000}, { 16, 4096 } };
+    NDDataType_t dataType = NDFloat64; // data type for each frame
+    int status = 0;
+    for(int i=0; i<2; ++i)
+    {
+        int maxSizeX = maxSizes[i][0];
+        int maxSizeY = maxSizes[i][1];
+		status =  setStringParam (i, ADManufacturer, "NucInstDig");
+		status |= setStringParam (i, ADModel, "NucInstDig");
+		status |= setIntegerParam(i, ADMaxSizeX, 1);
+		status |= setIntegerParam(i, ADMaxSizeY, 1);
+		status |= setIntegerParam(i, ADMinX, 0);
+		status |= setIntegerParam(i, ADMinY, 0);
+		status |= setIntegerParam(i, ADBinX, 1);
+		status |= setIntegerParam(i, ADBinY, 1);
+		status |= setIntegerParam(i, ADReverseX, 0);
+		status |= setIntegerParam(i, ADReverseY, 0);
+		status |= setIntegerParam(i, ADSizeX, 1);
+		status |= setIntegerParam(i, ADSizeY, 1);
+		status |= setIntegerParam(i, NDArraySizeX, 1);
+		status |= setIntegerParam(i, NDArraySizeY, 1);
+		status |= setIntegerParam(i, NDArraySize, 1);
+		status |= setIntegerParam(i, NDDataType, dataType);
+		status |= setIntegerParam(i, ADImageMode, ADImageContinuous);
+		status |= setIntegerParam(i, ADStatus, ADStatusIdle);
+		status |= setIntegerParam(i, ADAcquire, 0);
+		status |= setDoubleParam (i, ADAcquireTime, .001);
+		status |= setDoubleParam (i, ADAcquirePeriod, .005);
+		status |= setIntegerParam(i, ADNumImages, 100);
+    }
+
+    if (status) {
+        printf("%s: unable to set DAE parameters\n", functionName);
+        return;
+    }    
 
     // Create the thread for background tasks (not used at present, could be used for I/O intr scanning) 
     if (epicsThreadCreate("isisdaePoller1",
@@ -937,6 +1477,14 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
                           (EPICSTHREADFUNC)pollerThreadC4, this) == 0)
+    {
+        printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
+        return;
+    }
+    if (epicsThreadCreate("isisdaePoller5",
+                          epicsThreadPriorityMedium,
+                          epicsThreadGetStackSize(epicsThreadStackMedium),
+                          (EPICSTHREADFUNC)pollerThreadC5, this) == 0)
     {
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
@@ -976,6 +1524,15 @@ void NucInstDig::pollerThreadC4(void* arg)
 	if (driver != NULL)
 	{
 	    driver->pollerThread4();
+	}
+}
+
+void NucInstDig::pollerThreadC5(void* arg)
+{
+    NucInstDig* driver = (NucInstDig*)arg;
+	if (driver != NULL)
+	{
+	    driver->pollerThread5();
 	}
 }
 
@@ -1052,6 +1609,12 @@ void NucInstDig::pollerThread4()
 {
     static const char* functionName = "isisdaePoller1";
     updateDCSpectra();
+}
+
+void NucInstDig::pollerThread5()
+{
+    static const char* functionName = "isisdaePoller1";
+    updateAD();
 }
 
 void NucInstDig::zmqMonitorPoller()

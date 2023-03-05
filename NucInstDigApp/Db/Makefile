@@ -10,6 +10,7 @@ DB += NucInstDig.db NucInstDigDCSpec.db NucInstDigTrace.db
 DB += NucInstDigIntegerParam.db NucInstDigIntegerParamChan.db
 DB += NucInstDigRealParam.db NucInstDigRealParamChan.db
 DB += NucInstDigStringParam.db NucInstDigStringParamChan.db
+DB += ADNucInstDig.template
 
 #----------------------------------------------------
 # If <anyname>.db template is not named <anyname>*.template add

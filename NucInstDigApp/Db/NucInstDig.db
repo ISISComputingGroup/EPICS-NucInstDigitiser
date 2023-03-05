@@ -1,18 +1,28 @@
 record(bo, "$(P)$(Q)START:SP")
 {
-    field(DTYP, "asynInt32")
-    field(OUT,  "@asyn($(PORT),0,0)START")
 	field(UDFS, "NO_ALARM")
+	field(FLNK, "$(P)$(Q)_START:SP")
 }
 alias("$(P)$(Q)START:SP", "$(P)$(Q)START")
 
 record(bo, "$(P)$(Q)STOP:SP")
 {
-    field(DTYP, "asynInt32")
-    field(OUT,  "@asyn($(PORT),0,0)STOP")
 	field(UDFS, "NO_ALARM")
+	field(FLNK, "$(P)$(Q)_STOP:SP")
 }
 alias("$(P)$(Q)STOP:SP", "$(P)$(Q)STOP")
+
+record(bo, "$(P)$(Q)_START:SP")
+{
+    field(VAL, "1")
+    field(OUT,  "$(P)$(Q)AD:Acquire PP")
+}
+
+record(bo, "$(P)$(Q)_STOP:SP")
+{
+    field(VAL, "0")
+    field(OUT,  "$(P)$(Q)AD:Acquire PP")
+}
 
 record(bo, "$(P)$(Q)CONFIG:DGTZ:SP")
 {

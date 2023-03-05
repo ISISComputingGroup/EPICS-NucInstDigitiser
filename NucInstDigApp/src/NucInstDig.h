@@ -80,6 +80,8 @@ private:
     std::string m_targetAddress;
 
     int P_setup; // int, must be first createParam and in FIRST_NUCINSTDIG_PARAM
+    int P_startAcquisition; // int
+    int P_stopAcquisition; // int
     int P_DCSpecX[4]; // realarray
     int P_DCSpecY[4]; // realarray
     int P_DCSpecIdx[4]; // int
@@ -139,7 +141,7 @@ private:
 	void pollerThread4();
 	void pollerThread5();
     void readData2d(const std::string& name, const std::string& args, std::vector<double>& dataOut, size_t& nspec, size_t& npts);
-    void setADAcquire(int acquire);
+    void setADAcquire(int addr, int acquire);
     int computeImage(int addr, const std::vector<double>& data, int nx, int ny);
     template <typename epicsType> 
          int computeArray(int addr, const std::vector<double>& data, int maxSizeX, int maxSizeY);
@@ -156,6 +158,8 @@ private:
 };
 
 #define P_setupString	            "SETUP"
+#define P_startAcquisitionString	"START"
+#define P_stopAcquisitionString	    "STOP"
 #define P_configDGTZString          "CONFIG_DGTZ" 
 #define P_configBASEString          "CONFIG_BASE" 
 #define P_configHVString            "CONFIG_HV" 

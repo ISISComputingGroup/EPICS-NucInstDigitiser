@@ -47,7 +47,7 @@ static epicsThreadOnceId onceId = EPICS_THREAD_ONCE_INIT;
 
 static const char *driverName="NucInstDig";
 
-void NucInstDig::setADAcquire(int acquire)
+void NucInstDig::setADAcquire(int addr, int acquire)
 {
     int adstatus;
     int acquiring;
@@ -55,27 +55,24 @@ void NucInstDig::setADAcquire(int acquire)
     asynStatus status = asynSuccess;
 
     /* Ensure that ADStatus is set correctly before we set ADAcquire.*/
-	for(int i=0; i<maxAddr; ++i)
-	{
-		getIntegerParam(i, ADStatus, &adstatus);
-		getIntegerParam(i, ADAcquire, &acquiring);
-		getIntegerParam(i, ADImageMode, &imageMode);
+		getIntegerParam(addr, ADStatus, &adstatus);
+		getIntegerParam(addr, ADAcquire, &acquiring);
+		getIntegerParam(addr, ADImageMode, &imageMode);
 		  if (acquire && !acquiring) {
-			setStringParam(i, ADStatusMessage, "Acquiring data");
-			setIntegerParam(i, ADStatus, ADStatusAcquire); 
-			setIntegerParam(i, ADAcquire, 1); 
-            setIntegerParam(ADNumImagesCounter, 0);
+			setStringParam(addr, ADStatusMessage, "Acquiring data");
+			setIntegerParam(addr, ADStatus, ADStatusAcquire); 
+			setIntegerParam(addr, ADAcquire, 1); 
+            setIntegerParam(addr, ADNumImagesCounter, 0);
 		  }
 		  if (!acquire && acquiring) {
-			setIntegerParam(i, ADAcquire, 0); 
-			setStringParam(i, ADStatusMessage, "Acquisition stopped");
+			setIntegerParam(addr, ADAcquire, 0); 
+			setStringParam(addr, ADStatusMessage, "Acquisition stopped");
 			if (imageMode == ADImageContinuous) {
-			  setIntegerParam(i, ADStatus, ADStatusIdle);
+			  setIntegerParam(addr, ADStatus, ADStatusIdle);
 			} else {
-			  setIntegerParam(i, ADStatus, ADStatusAborted);
+			  setIntegerParam(addr, ADStatus, ADStatusAborted);
 			}
 		  }
-	}
 }
 
 void NucInstDig::setShutter(int addr, int open)
@@ -402,27 +399,27 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
     asynStatus stat = asynSuccess;
     const char *paramName = NULL;
     int function = pasynUser->reason;
+    int addr = 0;
+	getAddress(pasynUser, &addr);
 	getParamName(function, &paramName);
     try {
         if (function == ADAcquire)
         {            
-            setADAcquire(value);
-            if (value != 0)
-            {
-                executeCmd("start_acquisition", "");
-            }
-            else
-            {
-                executeCmd("stop_acquisition", "");
-            }
-            return ADDriver::writeInt32(pasynUser, value);
+            setADAcquire(addr, value);
+            // fall through to next line to call base class
         }
         if (function < FIRST_NUCINSTDIG_PARAM)
         {
             return ADDriver::writeInt32(pasynUser, value);
         }
         asynStatus stat = asynSuccess;
-        if (function == P_resetDCSpectra) {
+        if (function == P_startAcquisition) {
+            executeCmd("start_acquisition", "");
+        }
+        else if (function == P_stopAcquisition) {
+            executeCmd("stop_acquisition", "");
+        }
+        else if (function == P_resetDCSpectra) {
             executeCmd("reset_darkcount_spectra", "");
         }
         else if (function == P_configDGTZ) {
@@ -709,7 +706,7 @@ void NucInstDig::updateTraces()
 void NucInstDig::updateAD()
 {
     static const char* functionName = "isisdaePoller4";
-	int acquiring, enable, data_mode;
+	int acquiring, enable;
 	int all_acquiring, all_enable;
     int status = asynSuccess;
     int imageCounter;
@@ -719,7 +716,7 @@ void NucInstDig::updateAD()
     NDArray *pImage;
     double acquireTime, acquirePeriod, delay, updateTime;
     epicsTimeStamp startTime, endTime;
-    double elapsedTime, maxval;
+    double elapsedTime;
     std::vector<int> old_acquiring(maxAddr, 0);
 	std::vector<epicsTimeStamp> last_update(maxAddr);
 
@@ -733,6 +730,11 @@ void NucInstDig::updateAD()
 			try 
 			{
 				acquiring = enable = 0;
+                if (i == 0) {
+                    getIntegerParam(P_readDCSpectra, &enable);
+                } else {
+                    enable = 1; // traces always enabled
+                }
 				getIntegerParam(i, ADAcquire, &acquiring);
 				getDoubleParam(i, ADAcquirePeriod, &acquirePeriod);
 				
@@ -857,11 +859,10 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
 {
     int status = asynSuccess;
     NDDataType_t dataType;
-    int itemp, period;
+    int itemp;
     int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY;
     int xDim=0, yDim=1, colorDim=-1;
-    int resetImage;
-    int spec_start, trans_mode, maxSizeX, maxSizeY;
+    int maxSizeX, maxSizeY;
     int colorMode;
     int ndims=0;
     NDDimension_t dimsOut[3];
@@ -1377,7 +1378,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_zmq_cmd_ctx{1}, m_zmq_cmd_socket(m_zmq_cmd_ctx, zmq::socket_type::req),
                      m_zmq_stream_ctx{1}, m_zmq_stream_socket(m_zmq_stream_ctx, zmq::socket_type::pull),
                      m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pRaw(NULL),
-                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(16)
+                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8)
 {					
     const char *functionName = "NucInstDig";
     int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
@@ -1398,6 +1399,8 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
 
     createParam(P_setupString, asynParamInt32, &P_setup);  // must be first as FIRST_NUCINSTDIG_PARAM
+    createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition);
+    createParam(P_stopAcquisitionString, asynParamInt32, &P_stopAcquisition);
     createParam(P_configDGTZString, asynParamInt32, &P_configDGTZ);    
     createParam(P_configBASEString, asynParamInt32, &P_configBASE);    
     createParam(P_configHVString, asynParamInt32, &P_configHV);    

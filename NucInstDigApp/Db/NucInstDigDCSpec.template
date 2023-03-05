@@ -1,7 +1,7 @@
 record(waveform, "$(P)$(Q)DCSPEC$(N):X")
 {
     field(DESC, "Spectrum Numbers")
-    field(NELM, "20000")
+    field(NELM, "10000")
     field(FTVL, "DOUBLE")
     field(DTYP, "asynFloat64ArrayIn")
     field(INP,  "@asyn($(PORT),0,0)DCSPEC$(N)X")
@@ -11,7 +11,7 @@ record(waveform, "$(P)$(Q)DCSPEC$(N):X")
 record(waveform, "$(P)$(Q)DCSPEC$(N):Y")
 {
     field(DESC, "Spectrum Numbers")
-    field(NELM, "20000")
+    field(NELM, "10000")
     field(FTVL, "DOUBLE")
     field(DTYP, "asynFloat64ArrayIn")
     field(INP,  "@asyn($(PORT),0,0)DCSPEC$(N)Y")

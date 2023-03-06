@@ -1564,24 +1564,37 @@ void NucInstDig::pollerThread1()
         {
             for(const auto& kv : m_param_data)
             {
-                rapidjson::Value value;
                 const ParamData* p = kv.second;
-                getParameter(p->name, value, p->chan);
-                if (p->type == asynParamInt32)
+                try
                 {
-                    setIntegerParam(kv.first, (value.IsInt() ? value.GetInt() : atoi(value.GetString())));
+                    rapidjson::Value value;
+                    getParameter(p->name, value, p->chan);
+                    if (p->type == asynParamInt32)
+                    {
+                        setIntegerParam(kv.first, (value.IsInt() ? value.GetInt() : atoi(value.GetString())));
+                    }
+                    else if (p->type == asynParamFloat64)
+                    {
+                        setDoubleParam(kv.first, (value.IsNumber() ? value.GetDouble() : atof(value.GetString())));
+                    }
+                    else if (p->type == asynParamOctet)
+                    {
+                        setStringParam(kv.first, value.GetString());
+                    }
+                    else
+                    {
+                        std::cerr << "pollerThread1: invalid type " << p->type << " for " << p->name << std::endl;
+                    }
                 }
-                else if (p->type == asynParamFloat64)
+                catch(const std::exception& ex)
                 {
-                    setDoubleParam(kv.first, (value.IsNumber() ? value.GetDouble() : atof(value.GetString())));
+                    std::cerr << "pollerThread1: exception " << ex.what() << " for parameter " << p->name << " channel " << p->chan << std::endl;
+                    epicsThreadSleep(1.0);
                 }
-                else if (p->type == asynParamOctet)
+                catch(...)
                 {
-                    setStringParam(kv.first, value.GetString());
-                }
-                else
-                {
-                    std::cerr << "pollerThread1: invalid type " << p->type << " for " << p->name << std::endl;
+                    std::cerr << "pollerThread1: exception for parameter " << p->name << " channel " << p->chan << std::endl;
+                    epicsThreadSleep(1.0);
                 }
             }
             callParamCallbacks();

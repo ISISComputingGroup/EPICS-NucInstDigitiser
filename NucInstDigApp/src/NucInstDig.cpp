@@ -414,10 +414,10 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         asynStatus stat = asynSuccess;
         if (function == P_startAcquisition) {
-            executeCmd("start_acquisition", "");
+            //executeCmd("start_acquisition", "");
         }
         else if (function == P_stopAcquisition) {
-            executeCmd("stop_acquisition", "");
+            //executeCmd("stop_acquisition", "");
         }
         else if (function == P_resetDCSpectra) {
             executeCmd("reset_darkcount_spectra", "");
@@ -947,7 +947,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
         sizeY = maxSizeY-minY;
         status |= setIntegerParam(addr, ADSizeY, sizeY);
     }
-
+    
 	if (status)
 	{
 		asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
@@ -955,6 +955,11 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
 			driverName, functionName);
 		return (status);
 	}
+
+    if (sizeX == 0 || sizeY == 0)
+    {
+        return asynSuccess;
+    }
 
     switch (colorMode) {
         case NDColorModeMono:

@@ -414,10 +414,10 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         asynStatus stat = asynSuccess;
         if (function == P_startAcquisition) {
-            //executeCmd("start_acquisition", "");
+            executeCmd("start_acquisition", "");
         }
         else if (function == P_stopAcquisition) {
-            //executeCmd("stop_acquisition", "");
+            executeCmd("stop_acquisition", "");
         }
         else if (function == P_resetDCSpectra) {
             executeCmd("reset_darkcount_spectra", "");

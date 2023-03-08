@@ -1302,7 +1302,8 @@ void NucInstDig::setParameter(const std::string& name, int value, int idx)
 }
 
 void NucInstDig::execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2, rapidjson::Document& doc_recv)
-{    
+{
+    epicsGuard<epicsMutex> _lock(m_executeLock);
     rapidjson::Document doc_send;
     rapidjson::Value arg1v, arg2v;
     rapidjson::Value typev(type.c_str(), doc_send.GetAllocator());
@@ -1559,9 +1560,9 @@ void NucInstDig::pollerThread1()
     unsigned long counter = 0;
     while(true)
     {
-        lock();
         try
         {
+            epicsGuard<NucInstDig> _lock(*this);
             for(const auto& kv : m_param_data)
             {
                 const ParamData* p = kv.second;
@@ -1609,7 +1610,6 @@ void NucInstDig::pollerThread1()
             std::cerr << "pollerThread1: exception " << std::endl;
             epicsThreadSleep(3.0);
         }
-        unlock();
         epicsThreadSleep(3.0);
     }
 }
@@ -1643,9 +1643,22 @@ void NucInstDig::zmqMonitorPoller()
     static const char* functionName = "zmqMonitorPoller";
     while(true)
     {
-        m_zmq_cmd_mon.check_event(100);
-        m_zmq_stream_mon.check_event(100);
-        m_zmq_events_mon.check_event(100);
+        try
+        {
+            m_zmq_cmd_mon.check_event(100);
+            m_zmq_stream_mon.check_event(100);
+            m_zmq_events_mon.check_event(100);
+        }
+        catch(const std::exception& ex)
+        {
+            std::cerr << "zmqMonitorPoller: exception " << ex.what() << std::endl;
+            epicsThreadSleep(3.0);
+        }
+        catch(...)
+        {
+            std::cerr << "zmqMonitorPoller: exception " << std::endl;
+            epicsThreadSleep(3.0);
+        }
         epicsThreadSleep(0.5);
     }
 }

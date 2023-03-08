@@ -107,6 +107,7 @@ private:
     
     epicsMutex m_dcLock;
     epicsMutex m_tracesLock;
+    epicsMutex m_executeLock;
     
     std::vector<double> m_traces;
     std::vector<double> m_dcSpectra;

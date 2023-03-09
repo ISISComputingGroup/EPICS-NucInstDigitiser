@@ -414,9 +414,11 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
         asynStatus stat = asynSuccess;
         if (function == P_startAcquisition) {
+            std::cerr << "Starting digitiser acquisition" << std::endl;
             executeCmd("start_acquisition", "");
         }
         else if (function == P_stopAcquisition) {
+            std::cerr << "Stopping digitiser acquisition" << std::endl;
             executeCmd("stop_acquisition", "");
         }
         else if (function == P_resetDCSpectra) {
@@ -1352,6 +1354,7 @@ void NucInstDig::execute(const std::string& type, const std::string& name, const
     {
         std::ostrstream oss;
         oss << "Sent " << sendstr << " Error: code=" << doc_recv["error_code"].GetInt() << " message=" << doc_recv["message"].GetString();
+        std::cerr << oss.str() << std::endl;   // print as long message may get truncated on asyn print
         throw std::runtime_error(oss.str());
     }
 }

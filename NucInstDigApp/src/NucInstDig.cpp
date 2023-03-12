@@ -6,6 +6,9 @@
 #include <exception>
 #include <iostream>
 #include <strstream>
+#include <string>
+#include <sstream>
+#include <fstream>
 #include <map>
 #include <vector>
 #include <iomanip>
@@ -89,273 +92,65 @@ void NucInstDig::setShutter(int addr, int open)
     }
 }
 
-
 void NucInstDig::setup()
 {
-      rapidjson::Value value;  
-      try {
+    char setupFile[512];
+    rapidjson::Value value;  
+    setIntegerParam(P_setupDone, 0);
+    try {
         executeCmd("stop_acquisition");
-      }
-      catch(...) {
+    }
+    catch(...) {
           ;
+    }
+      getStringParam(P_setupFile, sizeof(setupFile), setupFile);
+      std::cerr << "SETUP: using file \"" << setupFile << "\"" << std::endl;
+      std::fstream fs(setupFile, std::ios::in);
+      if (!fs.good()) {
+          throw std::runtime_error(std::string("File \"") + setupFile + "\" does not exist");
       }
-//    s=sdk.get_parameter("dgtz.info.section")
-//    section = int(float(s))
-//    sn = sdk.get_parameter("system.serialnumber")
-//    swver = sdk.get_parameter("system.swversion")
-//    compile_data = sdk.get_parameter("system.compile_data")
-//    fwver = sdk.get_parameter("dgtz.probes.fwver")
-
-      getParameter("dgtz.probes.fwver", value);
-      std::cerr << "fwver " << value.GetString() << std::endl;      
-
-
-//    print("sn: " + sn + "  section: " + str(section))
-//    print("SW-VER: " + swver + " (" + compile_data + ")  -- FPGA-VER: "  + fwver)
-
-    // digitizer configuration
-    // the delay minimum between trigger and status packet redout
-    setParameter("dgtz.send_delay", "0");
-    //set signal polarity to negative "pos" / "neg"
-    setParameter("in.polarity", "neg");
-    // pre-trigger buffer len (us)
-    setParameter("dgtz.pre", 0.5);
-    // post-trigger acquisition buffer (us)
-    setParameter("dgtz.post", 20);
-    // delay on external trigger (us)
-    setParameter("dgtz.trg_delay", 0);
-    // trigger source: "ext_trigger", "self_le", "self_de", "periodic", "manual", "lemo_0"
-    setParameter("trg.mode", "periodic");
-    // internal trigger mode: "or", "and2", "and"
-    setParameter("trg.self_coinc", "or");
-    // periodic trigger rate (Hz)
-    setParameter("trg.self_rate", 50);
-    // trigger inibition (ns)
-    setParameter("trg.trigger_inib", 10);
-
-    // parameter those are different for each channel of the digitizer
-    for(int i=0; i<8; ++i) {
-        // trigger threshold (LSB)
-        setParameter("trg.threshold", 2000, i);
-        // trigger mask (LSB)
-        setParameter("trg.mask", 0, i);
-        // digital input offset
-        //setParameter("in.offset", -1350, i)
-        setParameter("in.offset", 0, i);
-        // trigger threshold (LSB)
-        //setParameter("in.chmap", CH_MAP[idx*8+i], i);
-        // for us idx=0 and CH_MAP = range(0,32)
-        setParameter("in.chmap", 8 * m_dig_idx + i, i);        
-    }
-
-    // configure BIAS
-    setParameter("stave.BIAS.enable", "false",0);
-    setParameter("stave.BIAS.V", 59,0);
-    setParameter("stave.BIAS.max_v", 62,0);
-    setParameter("stave.BIAS.max_i", 3,0);
-
-    setParameter("stave.BIAS.enable", "false",1);
-    setParameter("stave.BIAS.V", 52,1);
-    setParameter("stave.BIAS.max_v", 58,1);
-    setParameter("stave.BIAS.max_i", 3,1);
-
-    //    # configure BIAS compensation
-    for(int i=0; i<24; ++i) {
-        // correction_mode "off", "auto", "manual"
-        setParameter("stave.BIAS.correction_mode", "manual",i);
-        setParameter("stave.BIAS.correction_manual", 0.2,i);
-        // SiPM correction coefficient in V/°C
-        setParameter("stave.BIAS.correction_coeff", 0.035);
-        // offset in V
-        setParameter("stave.offset", 0,i);
-    }
-
-
-    // multi-photon processing
-    // spectrum readout mode: "manual", "auto"
-    setParameter("mp.spectrum_readout_mode", "manual");
-    // spectrum algorithm: "charge_integrator", "peak_holder"
-    setParameter("mp.spectrum_mode", "charge_integrator");
-    // periodic spectrum send and reset
-    setParameter("mp.auto_spectrum_time", 5000);
-    // acquisition gate length (ms)
-    setParameter("mp.gate_len", 30);
-    // delay from trigger (ms)
-    setParameter("mp.delay_from_trigger", 0.5);
-    // self trigger inibhit (us)
-    setParameter("mp.trigger_inib", 0);
-    // baseline length (samples)
-    setParameter("mp.bl_len", 0.05);
-    // baseline hold (us)
-    setParameter("mp.bl_hold", 0.05);
-    // integration pre trigger
-    setParameter("mp.int_pre", 0.015);//      #25u 0.015 #50u 0.025
-    // integration post trigger
-    setParameter("mp.int_post", 0.100);//  #25u 0.015 #50u 0.1
-    // peak detector search window
-    setParameter("mp.peak_detector_window", 0.2);
-    for(int i=0; i<8; ++i) {
-        // enable multi-photon spectrum
-        setParameter("mp.enable", "true", i);
-        // gain of charge integration
-        setParameter("mp.gain", 2, i);
-        // single photon threshold
-        setParameter("mp.threshold", 15, i);
-
-        setParameter("mp.offset", 150, i);
-        // offset of spectrum
-    }
-
-    // configure io
-    // configure digitizer lemo mode "in_h", "in_50", "out"
-    setParameter("dgtz.lemo.mode", "in_50", 0);
-    setParameter("dgtz.lemo.mode", "out", 1);
-
-    // configure digitizer lemo output source
-    // gnd", "high", "t0_out", "trigger_out", "tot_ch0",
-    // "tot_ch1","tot_ch2","tot_ch3","tot_ch4","tot_ch5","tot_ch6","tot_ch7",
-    // "run", "busy", "acquisition","mp_gate"
-    setParameter("dgtz.lemo.source", "tot_ch0", 0);
-    setParameter("dgtz.lemo.source", "trigger_out", 1);
-
-    // configure digitizer sync_out output source
-    // gnd", "high", "t0_out", "trigger_out", "tot_ch0",
-    // "tot_ch1","tot_ch2","tot_ch3","tot_ch4","tot_ch5","tot_ch6","tot_ch7",
-    // "run", "busy", "acquisition","mp_gate"
-    //setParameter("dgtz.sync.outmode", "tot_ch0", 0);
-    //setParameter("dgtz.sync.outmode", "tot_ch1", 1);
-    //setParameter("dgtz.sync.outmode", "tot_ch2", 2);
-    //setParameter("dgtz.sync.outmode", "tot_ch3", 3);
-    //setParameter("dgtz.sync.outmode", "tot_ch4", 4);
-    //setParameter("dgtz.sync.outmode", "tot_ch5", 5);
-    //setParameter("dgtz.sync.outmode", "tot_ch6", 6);
-    //setParameter("dgtz.sync.outmode", "tot_ch7", 7);
-    for(int i=0; i<8; ++i) {
-        setParameter("dgtz.sync.outmode", "gnd", i);
-    }
-    setParameter("dgtz.sync.outmode", "trigger_out", 0);
-
-    // configure base lemo mode "in", "out"
-    for(int i=0; i<16; ++i) {
-        setParameter("base.lemo.mode", "in", i);
-    }
-
-    // configure base lemo source
-    // "gnd", "high", "t0_out", "common_trigger", "clk_in", "busy", "status_packet",
-    // "sync_a_0","sync_a_1", "sync_a_2", "sync_a_3", "sync_a_4", "sync_a_5", "sync_a_6", "sync_a_7",
-    // "sync_b_0","sync_b_1", "sync_b_2", "sync_b_3", "sync_b_4", "sync_b_5", "sync_b_6", "sync_b_7",
-    // "sync_c_0","sync_c_1", "sync_c_2", "sync_c_3", "sync_c_4", "sync_c_5", "sync_c_6", "sync_c_7",
-    // "sync_d_0","sync_d_1", "sync_d_2", "sync_d_3", "sync_d_4", "sync_d_5", "sync_d_6", "sync_d_7"
-
-    //for(int i=0; i<8; ++i) {
-    //    setParameter("base.lemo.source", "sync_a_" + std::to_string(i), i);
-    //}
-    //for(int i=0; i<8; ++i) {
-    //    setParameter("base.lemo.source", "sync_b_" + std::to_string(i), i);
-    //}
-    for(int i=0; i<16; ++i) {
-        setParameter("base.lemo.source", "gnd", i);
-    }
-
-    // configure base sync source
-    // "gnd", "high", "common_trigger",
-    // "lemo_0", "lemo_1", "lemo_2", "lemo_3", "lemo_4", "lemo_5", "lemo_6", "lemo_7",
-    // "lemo_8", "lemo_9", "lemo_10", "lemo_11", "lemo_12", "lemo_13", "lemo_14", "lemo_15"
-    for(int i=0; i<8; ++i) {
-        setParameter("base.sync.outmode", "gnd", i);
-    }
-
-    setParameter("base.stave.power", "true", 0);
-    setParameter("base.stave.power", "true", 1);
-
-    setParameter("base.pulsegen.freq", 100000.0, 0);
-
-    // configure status packet frame source uart
-    // "lemo_0", "lemo_4", "lemo_8", "lemo_12", "rj45_lvds_0", "lvds_0", "lvds_8", "lvds_16", "lvds_24"
-    //  "frame_usart_tx"
-    setParameter("base.sp_rx.frame_source", "frame_usart_tx", 0);
-    
-   // configure status packet veto source uart
-    // "lemo_1", "lemo_5", "lemo_9", "lemo_13", "rj45_lvds_1", "lvds_1", "lvds_9", "lvds_17", "lvds_25"
-    // "veto_usart_tx"
-    setParameter("base.sp_rx.veto_source", "veto_usart_tx", 0);
-    // configure T0 source
-    // "gnd", "high", "t0_self", "rj45_lvds_0", "rj45_lvds_1", "rj45_lvds_2", "rj45_lvds_3",
-    // "lvds_0", "lvds_1", "lvds_2", "lvds_3", "lvds_28", "lvds_29", "lvds_30", "lvds_31",
-    // "lemo_0", "lemo_1", "lemo_2", "lemo_3", "lemo_4", "lemo_5", "lemo_6", "lemo_7",
-    // "lemo_8", "lemo_9", "lemo_10", "lemo_11", "lemo_12", "lemo_13", "lemo_14", "lemo_15"
-    setParameter("base.t0.source", "lemo_0", 0);
-
-    setParameter("base.t0.freq", 25.0, 0);
-    
-        // configure common_clk source
-    // "clk_int", "clk_ext", "rj45_lvds_0", "rj45_lvds_1", "rj45_lvds_2", "rj45_lvds_3",
-    // "lvds_16", "lvds_26"
-    setParameter("base.common_clock.source", "clk_int", 0);
-
-
-    // configure adc_sync source
-    // "internal", "gnd", "high", "rj45_lvds_0", "rj45_lvds_1", "rj45_lvds_2", "rj45_lvds_3",
-    // "lvds_6", "lvds_14", "lvds_23", "lvds_27",
-    // "lemo_0", "lemo_1", "lemo_2", "lemo_3", "lemo_4", "lemo_5", "lemo_6", "lemo_7",
-    // "lemo_8", "lemo_9", "lemo_10", "lemo_11", "lemo_12", "lemo_13", "lemo_14", "lemo_15"
-
-    setParameter("base.adc_sync.source", "internal", 0);
-    
-    
-    // configure emulator
-    // trigger inibition (ns)
-    for(int i=0; i<8; ++i) {
-        setParameter("dgtz.emu.amp", 100+100*i,i);
-        setParameter("dgtz.emu.period", 5000,i);
-    }
-    setParameter("dgtz.emu.noiseamp", 0);
-    setParameter("dgtz.emu.offset", 0);
-    setParameter("dgtz.emu.enable_pulse", "false");
-    setParameter("dgtz.emu.enable", "false");
-
-    // test parameter readback
-    for(int i=0; i<16; ++i) {
-        getParameter("base.lemo.mode", value);
-        std::cerr << i << " " << value.GetString() << std::endl;
-        getParameter("base.lemo.source", value);
-        std::cerr << i << " " << value.GetString() << std::endl;
-    }
-    for(int i=0; i<8; ++i) {
-        getParameter("base.sync.outmode", value);
-        std::cerr << i << " " << value.GetString() << std::endl;
-    }
-    //for i in range(0, 8):
-        //print(sdk.get_parameter("base.sync.outmode"),i);
-
-    //print(float(sdk.get_parameter("mp.gain")));
-
-    // configure event processor (fixed threshold)
-    setParameter("sw_process.enable", "false");
-    setParameter("sw_process.threshold", 520, 0);
-    setParameter("sw_process.threshold", 500, 1);
-    setParameter("sw_process.threshold", 520, 2);
-    setParameter("sw_process.threshold", 460, 3);
-    setParameter("sw_process.threshold", 3000, 4);
-    setParameter("sw_process.threshold", 3000, 5);
-    setParameter("sw_process.threshold", 3000, 6);
-    setParameter("sw_process.threshold", 3000, 7);
-    setParameter("sw_process.hist", 10);
-    setParameter("base.stave.power", "true", 0);
-
-    executeCmd("configure_dgtz");
-    executeCmd("configure_base");
-    executeCmd("configure_hv");
-    executeCmd("configure_staves");
-
-    executeCmd("reset_darkcount_spectra");
-
-    // print(sdk.read_data("get_darkcount_spectra"))
-    // print(sdk.read_data("get_waveforms"))
-    executeCmd("start_acquisition");
-
+      std::string line;
+      std::vector<std::string> split_line;
+      while(std::getline(fs, line)) {
+          // remove comments
+          size_t pos = line.find("#");
+          if (pos != std::string::npos) {
+              line.erase(line.begin() + pos, line.end());
+          }
+          boost::trim(line);
+          if (line.size() == 0) {
+              continue;
+          }
+          // split line into tokens
+          boost::split(split_line, line, boost::is_any_of("\t "));
+          if (split_line.size() < 1) {
+              std::cerr << "SETUP: <ignored> \"" << line << "\"" << std::endl;
+              continue;
+          }
+          // line is either a single command or   name,value,...   for setParameter
+          std::cerr << "SETUP: line \"" << boost::algorithm::join(split_line, " ") << "\"" << std::endl;
+          if (split_line.size() == 1) { // command
+              std::cerr << "SETUP: executeCmd(\"" << split_line[0] << "\")" << std::endl;
+              executeCmd(split_line[0]);
+              continue;
+          }
+          int idx_start = 0;
+          int idx_end = 1;
+          if (split_line.size() == 3) { // name, value, index
+              idx_start = atoi(split_line[2].c_str());
+              idx_end = idx_start + 1;
+          }
+          else if (split_line.size() == 4) { // name, value, start, end
+              idx_start = atoi(split_line[2].c_str());
+              idx_end = atoi(split_line[3].c_str());
+          }
+          for(int i=idx_start; i<idx_end; ++i) {
+              std::cerr << "SETUP: setParameter(\"" << split_line[0] << "\", \"" << split_line[1] << "\", index=" << i << ")" << std::endl;
+              setParameter(split_line[0], split_line[1], i);
+          }
+      }
+      setIntegerParam(P_setupDone, 1);
 }
-
 
 asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
@@ -378,10 +173,14 @@ asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
                 setParameter(p->name, value, p->chan);
             }
         }    
+        setStringParam(P_error, "");
         if (stat == asynSuccess)
         {
             stat = asynPortDriver::writeFloat64(pasynUser, value); // to update parameter and do callbacks
         }
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:%s: function=%d, name=%s, value=%f\n", 
+              driverName, functionName, function, paramName, value);
         return stat;
     }
     catch(const std::exception& ex)
@@ -389,6 +188,8 @@ asynStatus NucInstDig::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
                   "%s:%s: status=%d, function=%d, name=%s, value=%f, error=%s", 
                   driverName, functionName, stat, function, paramName, value, ex.what());
+        setStringParam(P_error, ex.what());
+        callParamCallbacks();
         return asynError;
     }
 }
@@ -456,10 +257,14 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
                 setParameter(p->name, value, p->chan);
             }
         }
+        setStringParam(P_error, "");
         if (stat == asynSuccess)
         {
             stat = asynPortDriver::writeInt32(pasynUser, value); // to update parameter and do callbacks
         }
+        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
+              "%s:%s: function=%d, name=%s, value=%d\n", 
+              driverName, functionName, function, paramName, value);
         return stat;
     }
     catch(const std::exception& ex)
@@ -467,6 +272,8 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize, 
                   "%s:%s: status=%d, function=%d, name=%s, value=%d, error=%s", 
                   driverName, functionName, stat, function, paramName, value, ex.what());
+        setStringParam(P_error, ex.what());
+        callParamCallbacks();
         return asynError;
     }
 }
@@ -606,6 +413,10 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
 		{
 		    status = ADDriver::writeOctet(pasynUser, value_s.c_str(), value_s.size(), nActual);
 		}
+        else if (function == P_setupFile)
+        {
+            ; // fall through to just update asyn parameter
+        }
         else
         {
             auto it = m_param_data.find(function);
@@ -615,6 +426,7 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
                 setParameter(p->name, value_s, p->chan);
             }
         }    
+        setStringParam(P_error, "");
 		status = asynPortDriver::writeOctet(pasynUser, value_s.c_str(), value_s.size(), nActual); // update parameters and do callbacks
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER, 
               "%s:%s: function=%d, name=%s, value=%s\n", 
@@ -631,6 +443,8 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
                   "%s:%s: status=%d, function=%d, name=%s, value=%s, error=%s", 
                   driverName, functionName, status, function, paramName, value_s.c_str(), ex.what());
 		*nActual = 0;
+        setStringParam(P_error, ex.what());
+        callParamCallbacks();
 		return asynError;
 	}
 	catch(...)
@@ -707,7 +521,7 @@ void NucInstDig::updateTraces()
 
 void NucInstDig::updateAD()
 {
-    static const char* functionName = "isisdaePoller4";
+    static const char* functionName = "NucInstDigPoller4";
 	int acquiring, enable;
 	int all_acquiring, all_enable;
     int status = asynSuccess;
@@ -1369,7 +1183,7 @@ void NucInstDig::createNParams(const char* name, asynParamType type, int* param,
     }
 }
 
-/// Constructor for the isisdaeDriver class.
+/// Constructor for the NucInstDigDriver class.
 /// Calls constructor for the asynPortDriver base class.
 /// \param[in] dcomint DCOM interface pointer created by lvDCOMConfigure()
 /// \param[in] portName @copydoc initArg0
@@ -1390,24 +1204,12 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8)
 {					
     const char *functionName = "NucInstDig";
-    int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
-    m_zmq_events_mon.init(m_zmq_events_socket, "inproc://NucInstDigConMon", events_to_monitor);
-    m_zmq_cmd_mon.init(m_zmq_cmd_socket, "inproc://NucInstDigConMon", events_to_monitor);
-    m_zmq_stream_mon.init(m_zmq_stream_socket, "inproc://NucInstDigConMon", events_to_monitor);
-    if (epicsThreadCreate("zmqMonitorPoller",
-                          epicsThreadPriorityMedium,
-                          epicsThreadGetStackSize(epicsThreadStackMedium),
-                          (EPICSTHREADFUNC)zmqMonitorPollerC, this) == 0)
-    {
-        printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
-        return;
-    }
-
-    m_zmq_events_socket.connect(std::string("tcp://") + targetAddress + ":5555");
-    m_zmq_cmd_socket.connect(std::string("tcp://") + targetAddress + ":5557");
-    m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
 
     createParam(P_setupString, asynParamInt32, &P_setup);  // must be first as FIRST_NUCINSTDIG_PARAM
+    createParam(P_setupFileString, asynParamOctet, &P_setupFile);
+    createParam(P_errorString, asynParamOctet, &P_error);
+    createParam(P_setupDoneString, asynParamInt32, &P_setupDone);
+    createParam(P_ZMQConnectedString, asynParamInt32, &P_ZMQConnected); 
     createParam(P_startAcquisitionString, asynParamInt32, &P_startAcquisition);
     createParam(P_stopAcquisitionString, asynParamInt32, &P_stopAcquisition);
     createParam(P_configDGTZString, asynParamInt32, &P_configDGTZ);    
@@ -1424,13 +1226,18 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
     
-	int maxSizes[2][2] = { {16, 20000}, { 16, 4096 } };
+    setStringParam(P_setupFile, "");
+    setStringParam(P_error, "");
+    setIntegerParam(P_setupDone, 0);
+    setIntegerParam(P_ZMQConnected, 0);
+    
+	//int maxSizes[2][2] = { {16, 20000}, { 16, 4096 } };
     NDDataType_t dataType = NDFloat64; // data type for each frame
     int status = 0;
     for(int i=0; i<2; ++i)
     {
-        int maxSizeX = maxSizes[i][0];
-        int maxSizeY = maxSizes[i][1];
+        //int maxSizeX = maxSizes[i][0];
+        //int maxSizeY = maxSizes[i][1];
 		status =  setStringParam (i, ADManufacturer, "NucInstDig");
 		status |= setStringParam (i, ADModel, "NucInstDig");
 		status |= setIntegerParam(i, ADMaxSizeX, 1);
@@ -1460,8 +1267,25 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         return;
     }    
 
+    int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
+    m_zmq_events_mon.init(m_zmq_events_socket, "inproc://NucInstDigConMon", events_to_monitor);
+    m_zmq_cmd_mon.init(m_zmq_cmd_socket, "inproc://NucInstDigConMon", events_to_monitor);
+    m_zmq_stream_mon.init(m_zmq_stream_socket, "inproc://NucInstDigConMon", events_to_monitor);
+    if (epicsThreadCreate("zmqMonitorPoller",
+                          epicsThreadPriorityMedium,
+                          epicsThreadGetStackSize(epicsThreadStackMedium),
+                          (EPICSTHREADFUNC)zmqMonitorPollerC, this) == 0)
+    {
+        printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
+        return;
+    }
+
+    m_zmq_events_socket.connect(std::string("tcp://") + targetAddress + ":5555");
+    m_zmq_cmd_socket.connect(std::string("tcp://") + targetAddress + ":5557");
+    m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
+
     // Create the thread for background tasks (not used at present, could be used for I/O intr scanning) 
-    if (epicsThreadCreate("isisdaePoller1",
+    if (epicsThreadCreate("NucInstDigPoller1",
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
                           (EPICSTHREADFUNC)pollerThreadC1, this) == 0)
@@ -1469,7 +1293,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
     }
-    if (epicsThreadCreate("isisdaePoller2",
+    if (epicsThreadCreate("NucInstDigPoller2",
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
                           (EPICSTHREADFUNC)pollerThreadC2, this) == 0)
@@ -1477,7 +1301,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
     }
-    if (epicsThreadCreate("isisdaePoller3",
+    if (epicsThreadCreate("NucInstDigPoller3",
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
                           (EPICSTHREADFUNC)pollerThreadC3, this) == 0)
@@ -1485,7 +1309,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
     }
-    if (epicsThreadCreate("isisdaePoller4",
+    if (epicsThreadCreate("NucInstDigPoller4",
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
                           (EPICSTHREADFUNC)pollerThreadC4, this) == 0)
@@ -1493,7 +1317,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
     }
-    if (epicsThreadCreate("isisdaePoller5",
+    if (epicsThreadCreate("NucInstDigPoller5",
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
                           (EPICSTHREADFUNC)pollerThreadC5, this) == 0)
@@ -1559,7 +1383,7 @@ void NucInstDig::zmqMonitorPollerC(void* arg)
 
 void NucInstDig::pollerThread1()
 {
-    static const char* functionName = "isisdaePoller1";
+    static const char* functionName = "NucInstDigPoller1";
     unsigned long counter = 0;
     while(true)
     {
@@ -1619,25 +1443,25 @@ void NucInstDig::pollerThread1()
 
 void NucInstDig::pollerThread2()
 {
-    static const char* functionName = "isisdaePoller1";
+    static const char* functionName = "NucInstDigPoller2";
     updateTraces();
 }
 
 void NucInstDig::pollerThread3()
 {
-    static const char* functionName = "isisdaePoller1";
+    static const char* functionName = "NucInstDigPoller3";
     updateEvents();
 }
 
 void NucInstDig::pollerThread4()
 {
-    static const char* functionName = "isisdaePoller1";
+    static const char* functionName = "NucInstDigPoller4";
     updateDCSpectra();
 }
 
 void NucInstDig::pollerThread5()
 {
-    static const char* functionName = "isisdaePoller1";
+    static const char* functionName = "NucInstDigPoller5";
     updateAD();
 }
 
@@ -1646,6 +1470,7 @@ void NucInstDig::zmqMonitorPoller()
     static const char* functionName = "zmqMonitorPoller";
     while(true)
     {
+        epicsThreadSleep(0.5);
         try
         {
             m_zmq_cmd_mon.check_event(100);
@@ -1662,7 +1487,14 @@ void NucInstDig::zmqMonitorPoller()
             std::cerr << "zmqMonitorPoller: exception " << std::endl;
             epicsThreadSleep(3.0);
         }
-        epicsThreadSleep(0.5);
+        lock();
+        if (m_zmq_cmd_mon.connected() && m_zmq_stream_mon.connected() && m_zmq_events_mon.connected()) {
+            setIntegerParam(P_ZMQConnected, 1);
+        } else {
+            setIntegerParam(P_ZMQConnected, 0);
+        }
+        callParamCallbacks();        
+        unlock();
     }
 }
 
@@ -1674,7 +1506,7 @@ void NucInstDig::zmqMonitorPoller()
   */
 void NucInstDig::report(FILE *fp, int details)
 {
-    fprintf(fp, "ISIS DAE driver %s\n", this->portName);
+    fprintf(fp, "NucInstDig driver %s\n", this->portName);
     if (details > 0) {
         int nx, ny, dataType;
         getIntegerParam(ADSizeX, &nx);
@@ -1683,6 +1515,9 @@ void NucInstDig::report(FILE *fp, int details)
         fprintf(fp, "  NX, NY:            %d  %d\n", nx, ny);
         fprintf(fp, "  Data type:         %d\n", dataType);
     }
+    int connected;
+    getIntegerParam(P_ZMQConnected, &connected);
+    fprintf(fp, "connected: %s\n", (connected != 0 ? "YES" : "NO"));
     /* Invoke the base class method */
     ADDriver::report(fp, details);
 }
@@ -1760,7 +1595,7 @@ int nucInstDigConfigure(const char *portName, const char *targetAddress, int dig
 
 // EPICS iocsh shell commands 
 
-// isisdaeConfigure
+// NucInstDigConfigure
 extern "C" {
     
 static const iocshArg initArg0 = { "portName", iocshArgString};			///< The name of the asyn driver port we will

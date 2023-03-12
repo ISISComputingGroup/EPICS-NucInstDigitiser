@@ -13,30 +13,40 @@ struct ParamData
 };
 
 class zmq_monitor_t : public zmq::monitor_t {
+    bool m_connected;
 public:
+    zmq_monitor_t() : zmq::monitor_t(), m_connected(false) { }
+    bool connected() const { return m_connected; }
+    
     void on_event_connected(const zmq_event_t& event, const char* addr) override
     {
         std::cerr << "ZMQ: Connection from " << addr << std::endl;
+        m_connected = true;
     }
     void on_event_disconnected(const zmq_event_t & event, const char* addr) override
     {
         std::cerr << "ZMQ: Disconnect from " << addr << std::endl;
+        m_connected = false;
     }        
     void on_event_closed(const zmq_event_t& event, const char* addr) override
     {
         std::cerr << "ZMQ: Closed from " << addr << std::endl;
+        m_connected = false;
     }        
     void on_event_bind_failed(const zmq_event_t& event, const char* addr) override
     {
         std::cerr << "ZMQ: Bind failed from " << addr << std::endl;
+        m_connected = false;
     }        
     void on_event_connect_retried(const zmq_event_t& event, const char* addr) override
     {
         std::cerr << "ZMQ: Connect retried from " << addr << std::endl;
+        m_connected = false;
     }        
     void on_event_connect_delayed(const zmq_event_t& event, const char* addr) override
     {
         std::cerr << "ZMQ: Connect delayed from " << addr << std::endl;
+        m_connected = false;
     }        
 		    
 };
@@ -80,6 +90,10 @@ private:
     std::string m_targetAddress;
 
     int P_setup; // int, must be first createParam and in FIRST_NUCINSTDIG_PARAM
+    int P_setupFile; // string
+    int P_setupDone; // int
+    int P_error; // string
+    int P_ZMQConnected; // int
     int P_startAcquisition; // int
     int P_stopAcquisition; // int
     int P_DCSpecX[4]; // realarray
@@ -159,6 +173,10 @@ private:
 };
 
 #define P_setupString	            "SETUP"
+#define P_setupFileString	        "SETUP_FILE"
+#define P_setupDoneString	        "SETUP_DONE"
+#define P_ZMQConnectedString	    "ZMQ_CONNECTED"
+#define P_errorString	            "ERROR"
 #define P_startAcquisitionString	"START"
 #define P_stopAcquisitionString	    "STOP"
 #define P_configDGTZString          "CONFIG_DGTZ" 

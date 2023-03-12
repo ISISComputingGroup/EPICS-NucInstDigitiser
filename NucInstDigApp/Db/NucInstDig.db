@@ -116,3 +116,49 @@ record(longout, "$(P)$(Q)SETUP:SP")
 	field(UDFS, "NO_ALARM")
 }
 alias("$(P)$(Q)SETUP:SP", "$(P)$(Q)SETUP")
+
+record(waveform, "$(P)$(Q)SETUP:FILE:SP")
+{
+    field(DTYP, "asynOctetWrite")
+    field(INP,  "@asyn($(PORT),0,0)SETUP_FILE")
+	field(FTVL, "CHAR")
+	field(NELM, 512)
+	field(PINI, "YES")
+    info(autosaveFields, "VAL")
+}
+
+record(waveform, "$(P)$(Q)SETUP:FILE")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0,0)SETUP_FILE")
+	field(FTVL, "CHAR")
+	field(NELM, 512)
+	field(SCAN, "I/O Intr")
+}
+
+record(bi, "$(P)$(Q)SETUP:DONE")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0,0)SETUP_DONE")
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(Q)ERROR")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0,0)ERROR")
+	field(FTVL, "CHAR")
+	field(NELM, 512)
+	field(SCAN, "I/O Intr")
+}
+
+record(bi, "$(P)$(Q)ZMQ_CONN")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0,0)ZMQ_CONNECTED")
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(SCAN, "I/O Intr")
+}

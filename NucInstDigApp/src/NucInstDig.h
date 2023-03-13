@@ -77,6 +77,8 @@ public:
 
 private:
 
+    std::atomic<bool> m_connected;
+
     zmq::context_t m_zmq_cmd_ctx;
     zmq::socket_t m_zmq_cmd_socket;
     zmq_monitor_t m_zmq_cmd_mon;

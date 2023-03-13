@@ -1201,7 +1201,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_zmq_cmd_ctx{1}, m_zmq_cmd_socket(m_zmq_cmd_ctx, zmq::socket_type::req),
                      m_zmq_stream_ctx{1}, m_zmq_stream_socket(m_zmq_stream_ctx, zmq::socket_type::pull),
                      m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pRaw(NULL),
-                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8)
+                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_connected(false)
 {					
     const char *functionName = "NucInstDig";
 
@@ -1279,6 +1279,18 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
     }
+    
+    m_zmq_cmd_socket.set(zmq::sockopt::linger, 5000);
+    m_zmq_cmd_socket.set(zmq::sockopt::rcvtimeo, 5000);
+    m_zmq_cmd_socket.set(zmq::sockopt::sndtimeo, 5000);
+
+    m_zmq_stream_socket.set(zmq::sockopt::linger, 5000);
+    m_zmq_stream_socket.set(zmq::sockopt::rcvtimeo, 5000);
+    m_zmq_stream_socket.set(zmq::sockopt::sndtimeo, 5000);
+
+    m_zmq_events_socket.set(zmq::sockopt::linger, 5000);
+    m_zmq_events_socket.set(zmq::sockopt::rcvtimeo, 5000);
+    m_zmq_events_socket.set(zmq::sockopt::sndtimeo, 5000);
 
     m_zmq_events_socket.connect(std::string("tcp://") + targetAddress + ":5555");
     m_zmq_cmd_socket.connect(std::string("tcp://") + targetAddress + ":5557");
@@ -1490,8 +1502,10 @@ void NucInstDig::zmqMonitorPoller()
         lock();
         if (m_zmq_cmd_mon.connected() && m_zmq_stream_mon.connected() && m_zmq_events_mon.connected()) {
             setIntegerParam(P_ZMQConnected, 1);
+            m_connected = true;
         } else {
             setIntegerParam(P_ZMQConnected, 0);
+            m_connected = false;
         }
         callParamCallbacks();        
         unlock();

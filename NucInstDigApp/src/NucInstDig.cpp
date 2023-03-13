@@ -14,6 +14,7 @@
 #include <iomanip>
 #include <sys/timeb.h>
 #include <numeric>
+#include <atomic>
 #include <boost/algorithm/string.hpp>
 
 #include <rapidjson/document.h>

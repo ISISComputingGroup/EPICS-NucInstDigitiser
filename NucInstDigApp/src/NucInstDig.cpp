@@ -502,12 +502,11 @@ void NucInstDig::updateTraces()
         epicsTimeGetCurrent(&now);
         if (epicsTimeDiffInSeconds(&now, &last_update) > 0.5)
         {
-            lock();
+            epicsGuard<NucInstDig> _lock(*this);
             for(size_t j=0; j<4; ++j) {
                 doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceX[j].data()), m_traceX[j].size(), P_traceX[j], 0);
                 doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceY[j].data()), m_traceY[j].size(), P_traceY[j], 0);
             }
-            unlock();
             last_update = now;
         }
         }
@@ -997,10 +996,9 @@ void NucInstDig::updateDCSpectra()
                         m_DCSpecX[j][k] = k;
                         m_DCSpecY[j][k] = m_dcSpectra[idx * m_nDCPts + k];
                     }
-                    lock();
+                    epicsGuard<NucInstDig> _lock2(*this);
                     doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecX[j].data()), m_DCSpecX[j].size(), P_DCSpecX[j], 0);
                     doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_DCSpecY[j].data()), m_DCSpecY[j].size(), P_DCSpecY[j], 0);
-                    unlock();
                 }
             }
         }
@@ -1162,7 +1160,7 @@ void NucInstDig::execute(const std::string& type, const std::string& name, const
     }
     else
     {
-        throw std::runtime_error("unknown command");
+        throw std::runtime_error(std::string("unknown command type: ") + type);
     }
 
     rapidjson::StringBuffer sb;
@@ -1173,13 +1171,13 @@ void NucInstDig::execute(const std::string& type, const std::string& name, const
     zmq::send_result_t nbytes_send = m_zmq_cmd_socket.send(zmq::buffer(sendstr), zmq::send_flags::none);
     if (!nbytes_send || *nbytes_send == 0)
     {
-        throw std::runtime_error("unable to send");
+        throw std::runtime_error(std::string("unable to send: ") + type + " " + arg1 + " " + arg2);
     }
     zmq::message_t reply{};
     zmq::recv_result_t nbytes_recv = m_zmq_cmd_socket.recv(reply, zmq::recv_flags::none);
     if (!nbytes_recv || *nbytes_recv == 0)
     {
-        throw std::runtime_error("unable to receive");
+        throw std::runtime_error(std::string("unable to receive: ") + type + " " + arg1 + " " + arg2);
     }
 //    std::cout << "Received " << reply.to_string() << std::endl;
     doc_recv.Parse(reply.to_string().c_str());
@@ -1518,16 +1516,17 @@ void NucInstDig::zmqMonitorPoller()
             std::cerr << "zmqMonitorPoller: exception " << std::endl;
             epicsThreadSleep(3.0);
         }
-        lock();
-        if (m_zmq_cmd_mon.connected() && m_zmq_stream_mon.connected() && m_zmq_events_mon.connected()) {
-            setIntegerParam(P_ZMQConnected, 1);
-            m_connected = true;
-        } else {
-            setIntegerParam(P_ZMQConnected, 0);
-            m_connected = false;
+        {
+            epicsGuard<NucInstDig> _lock(*this);
+            if (m_zmq_cmd_mon.connected() && m_zmq_stream_mon.connected() && m_zmq_events_mon.connected()) {
+                setIntegerParam(P_ZMQConnected, 1);
+                m_connected = true;
+            } else {
+                setIntegerParam(P_ZMQConnected, 0);
+                m_connected = false;
+            }
+            callParamCallbacks();
         }
-        callParamCallbacks();        
-        unlock();
     }
 }
 

@@ -467,7 +467,12 @@ void NucInstDig::updateTraces()
     {
         try {
         zmq::message_t reply{};
-        m_zmq_stream_socket.recv(reply, zmq::recv_flags::none);
+        zmq::recv_result_t nbytes = m_zmq_stream_socket.recv(reply, zmq::recv_flags::none);
+        if (!nbytes || *nbytes == 0)
+        {
+            epicsThreadSleep(1.0);
+            continue;
+        }
         auto msg = GetDigitizerAnalogTraceMessage(reply.data());
         auto channels = msg->channels();
         for(int i=0; i<channels->size(); ++i) {
@@ -509,12 +514,12 @@ void NucInstDig::updateTraces()
         catch(const std::exception& ex)
         {
             std::cerr << "updaetTraces " << ex.what() << std::endl;
-            epicsThreadSleep(3.0);            
+            epicsThreadSleep(3.0);
         }
         catch(...)
         {
             std::cerr << "update traces exception"  << std::endl;
-            epicsThreadSleep(3.0);            
+            epicsThreadSleep(3.0);
         }
     }
 }
@@ -1026,7 +1031,12 @@ void NucInstDig::updateEvents()
         }
         try {
         zmq::message_t reply{};
-        m_zmq_events_socket.recv(reply, zmq::recv_flags::none);
+        zmq::recv_result_t nbytes = m_zmq_events_socket.recv(reply, zmq::recv_flags::none);
+        if (!nbytes || *nbytes == 0)
+        {
+            epicsThreadSleep(1.0);
+            continue;
+        }
         auto msg = GetDigitizerEventListMessage(reply.data());
         auto channels = msg->channel();
         auto times = msg->time();
@@ -1160,9 +1170,17 @@ void NucInstDig::execute(const std::string& type, const std::string& name, const
     doc_send.Accept(writer);
     std::string sendstr = sb.GetString();
 //    std::cout << "Sending " << sendstr << std::endl;
-    m_zmq_cmd_socket.send(zmq::buffer(sendstr), zmq::send_flags::none);
+    zmq::send_result_t nbytes_send = m_zmq_cmd_socket.send(zmq::buffer(sendstr), zmq::send_flags::none);
+    if (!nbytes_send || *nbytes_send == 0)
+    {
+        throw std::runtime_error("unable to send");
+    }
     zmq::message_t reply{};
-    m_zmq_cmd_socket.recv(reply, zmq::recv_flags::none);
+    zmq::recv_result_t nbytes_recv = m_zmq_cmd_socket.recv(reply, zmq::recv_flags::none);
+    if (!nbytes_recv || *nbytes_recv == 0)
+    {
+        throw std::runtime_error("unable to receive");
+    }
 //    std::cout << "Received " << reply.to_string() << std::endl;
     doc_recv.Parse(reply.to_string().c_str());
     if (doc_recv["response"] != "ok")

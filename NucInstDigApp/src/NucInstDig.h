@@ -69,6 +69,7 @@ class ZMQConnectionHandler
     {
         epicsGuard<epicsMutex> _lock(m_lock);
         int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
+        std::cerr << "ZMQ: initialising new socket for " << m_address << std::endl;
         if (m_zmq_socket != nullptr)
         {
             m_zmq_socket->set(zmq::sockopt::linger, 0);

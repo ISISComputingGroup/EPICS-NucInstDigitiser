@@ -51,6 +51,77 @@ public:
 		    
 };
 
+class ZMQConnectionHandler
+{
+    zmq::context_t m_zmq_ctx;
+    zmq::socket_t* m_zmq_socket;
+    zmq_monitor_t* m_zmq_mon;
+    zmq::socket_type m_sock_type;
+    std::string m_address;
+    epicsMutex m_lock;
+    public:
+    ZMQConnectionHandler(zmq::socket_type sock_type, const std::string& address) : m_sock_type(sock_type), m_address(address), m_zmq_ctx{1}, m_zmq_socket(nullptr), m_zmq_mon(nullptr)
+    {
+        init();
+    }
+    
+    void init()
+    {
+        epicsGuard<epicsMutex> _lock(m_lock);
+        int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
+        if (m_zmq_socket != nullptr)
+        {
+            m_zmq_socket->set(zmq::sockopt::linger, 0);
+        }
+        delete m_zmq_mon;
+        delete m_zmq_socket;
+        m_zmq_socket = new zmq::socket_t(m_zmq_ctx, m_sock_type);
+        m_zmq_socket->set(zmq::sockopt::linger, 5000);
+        m_zmq_socket->set(zmq::sockopt::rcvtimeo, 5000);
+        m_zmq_socket->set(zmq::sockopt::sndtimeo, 5000);
+        m_zmq_mon = new zmq_monitor_t();
+        m_zmq_mon->init(*m_zmq_socket, "inproc://NucInstDigConMon", events_to_monitor);
+        m_zmq_socket->connect(m_address);
+    }
+
+    bool connected()
+    {
+        epicsGuard<epicsMutex> _lock(m_lock);
+        return m_zmq_mon->connected();
+    }
+    
+    void pollMonitor(int timeout = 10)
+    {
+        epicsGuard<epicsMutex> _lock(m_lock);
+        m_zmq_mon->check_event(timeout);        
+    }
+    
+    zmq::recv_result_t recv(zmq::message_t& message, zmq::recv_flags flags)
+    {
+        epicsGuard<epicsMutex> _lock(m_lock);
+        return m_zmq_socket->recv(message, flags);
+    }
+
+    zmq::send_result_t send(zmq::const_buffer buffer, zmq::send_flags flags)
+    {
+        epicsGuard<epicsMutex> _lock(m_lock);
+        return m_zmq_socket->send(buffer, flags);
+    }
+
+    zmq::send_result_t send(zmq::message_t &msg, zmq::send_flags flags)
+    {
+        epicsGuard<epicsMutex> _lock(m_lock);
+        return m_zmq_socket->send(msg, flags);
+    }
+
+    zmq::send_result_t send(zmq::message_t &&msg, zmq::send_flags flags)
+    {
+        epicsGuard<epicsMutex> _lock(m_lock);
+        return m_zmq_socket->send(msg, flags);
+    }
+
+};
+
 class NucInstDig : public ADDriver
 {
 public:
@@ -79,15 +150,9 @@ private:
 
     std::atomic<bool> m_connected;
 
-    zmq::context_t m_zmq_cmd_ctx;
-    zmq::socket_t m_zmq_cmd_socket;
-    zmq_monitor_t m_zmq_cmd_mon;
-    zmq::context_t m_zmq_stream_ctx;
-    zmq::socket_t m_zmq_stream_socket;
-    zmq_monitor_t m_zmq_stream_mon;
-    zmq::context_t m_zmq_events_ctx;
-    zmq::socket_t m_zmq_events_socket;
-    zmq_monitor_t m_zmq_events_mon;
+    ZMQConnectionHandler m_zmq_cmd;
+    ZMQConnectionHandler m_zmq_stream;
+    ZMQConnectionHandler m_zmq_events;
     
     std::string m_targetAddress;
 

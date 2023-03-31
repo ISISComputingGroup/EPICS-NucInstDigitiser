@@ -467,7 +467,7 @@ void NucInstDig::updateTraces()
     {
         try {
         zmq::message_t reply{};
-        zmq::recv_result_t nbytes = m_zmq_stream_socket.recv(reply, zmq::recv_flags::none);
+        zmq::recv_result_t nbytes = m_zmq_stream.recv(reply, zmq::recv_flags::none);
         if (!nbytes || *nbytes == 0)
         {
             epicsThreadSleep(1.0);
@@ -1029,7 +1029,7 @@ void NucInstDig::updateEvents()
         }
         try {
         zmq::message_t reply{};
-        zmq::recv_result_t nbytes = m_zmq_events_socket.recv(reply, zmq::recv_flags::none);
+        zmq::recv_result_t nbytes = m_zmq_events.recv(reply, zmq::recv_flags::none);
         if (!nbytes || *nbytes == 0)
         {
             epicsThreadSleep(1.0);
@@ -1168,15 +1168,17 @@ void NucInstDig::execute(const std::string& type, const std::string& name, const
     doc_send.Accept(writer);
     std::string sendstr = sb.GetString();
 //    std::cout << "Sending " << sendstr << std::endl;
-    zmq::send_result_t nbytes_send = m_zmq_cmd_socket.send(zmq::buffer(sendstr), zmq::send_flags::none);
+    zmq::send_result_t nbytes_send = m_zmq_cmd.send(zmq::buffer(sendstr), zmq::send_flags::none);
     if (!nbytes_send || *nbytes_send == 0)
     {
+        m_zmq_cmd.init();
         throw std::runtime_error(std::string("unable to send: ") + type + " " + arg1 + " " + arg2);
     }
     zmq::message_t reply{};
-    zmq::recv_result_t nbytes_recv = m_zmq_cmd_socket.recv(reply, zmq::recv_flags::none);
+    zmq::recv_result_t nbytes_recv = m_zmq_cmd.recv(reply, zmq::recv_flags::none);
     if (!nbytes_recv || *nbytes_recv == 0)
     {
+        m_zmq_cmd.init();
         throw std::runtime_error(std::string("unable to receive: ") + type + " " + arg1 + " " + arg2);
     }
 //    std::cout << "Received " << reply.to_string() << std::endl;
@@ -1214,9 +1216,9 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                     1, /* Autoconnect */
                     0, /* Default priority */
                     0),	/* Default stack size*/
-                     m_zmq_events_ctx{1}, m_zmq_events_socket(m_zmq_events_ctx, zmq::socket_type::pull),
-                     m_zmq_cmd_ctx{1}, m_zmq_cmd_socket(m_zmq_cmd_ctx, zmq::socket_type::req),
-                     m_zmq_stream_ctx{1}, m_zmq_stream_socket(m_zmq_stream_ctx, zmq::socket_type::pull),
+                     m_zmq_events(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5555"),
+                     m_zmq_cmd(zmq::socket_type::req, std::string("tcp://") + targetAddress + ":5557"),
+                     m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556"),
                      m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pRaw(NULL),
                      m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_connected(false)
 {					
@@ -1284,10 +1286,6 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         return;
     }    
 
-    int events_to_monitor =  ZMQ_EVENT_CONNECTED|ZMQ_EVENT_DISCONNECTED|ZMQ_EVENT_CLOSED|ZMQ_EVENT_BIND_FAILED|ZMQ_EVENT_CONNECT_DELAYED|ZMQ_EVENT_CONNECT_RETRIED;
-    m_zmq_events_mon.init(m_zmq_events_socket, "inproc://NucInstDigConMon", events_to_monitor);
-    m_zmq_cmd_mon.init(m_zmq_cmd_socket, "inproc://NucInstDigConMon", events_to_monitor);
-    m_zmq_stream_mon.init(m_zmq_stream_socket, "inproc://NucInstDigConMon", events_to_monitor);
     if (epicsThreadCreate("zmqMonitorPoller",
                           epicsThreadPriorityMedium,
                           epicsThreadGetStackSize(epicsThreadStackMedium),
@@ -1297,22 +1295,6 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         return;
     }
     
-    m_zmq_cmd_socket.set(zmq::sockopt::linger, 5000);
-    m_zmq_cmd_socket.set(zmq::sockopt::rcvtimeo, 5000);
-    m_zmq_cmd_socket.set(zmq::sockopt::sndtimeo, 5000);
-
-    m_zmq_stream_socket.set(zmq::sockopt::linger, 5000);
-    m_zmq_stream_socket.set(zmq::sockopt::rcvtimeo, 5000);
-    m_zmq_stream_socket.set(zmq::sockopt::sndtimeo, 5000);
-
-    m_zmq_events_socket.set(zmq::sockopt::linger, 5000);
-    m_zmq_events_socket.set(zmq::sockopt::rcvtimeo, 5000);
-    m_zmq_events_socket.set(zmq::sockopt::sndtimeo, 5000);
-
-    m_zmq_events_socket.connect(std::string("tcp://") + targetAddress + ":5555");
-    m_zmq_cmd_socket.connect(std::string("tcp://") + targetAddress + ":5557");
-    m_zmq_stream_socket.connect(std::string("tcp://") + targetAddress + ":5556");
-
     // Create the thread for background tasks (not used at present, could be used for I/O intr scanning) 
     if (epicsThreadCreate("NucInstDigPoller1",
                           epicsThreadPriorityMedium,
@@ -1502,9 +1484,9 @@ void NucInstDig::zmqMonitorPoller()
         epicsThreadSleep(0.5);
         try
         {
-            m_zmq_cmd_mon.check_event(100);
-            m_zmq_stream_mon.check_event(100);
-            m_zmq_events_mon.check_event(100);
+            m_zmq_cmd.pollMonitor();
+            m_zmq_stream.pollMonitor();
+            m_zmq_events.pollMonitor();
         }
         catch(const std::exception& ex)
         {
@@ -1518,7 +1500,7 @@ void NucInstDig::zmqMonitorPoller()
         }
         {
             epicsGuard<NucInstDig> _lock(*this);
-            if (m_zmq_cmd_mon.connected() && m_zmq_stream_mon.connected() && m_zmq_events_mon.connected()) {
+            if (m_zmq_cmd.connected() && m_zmq_stream.connected() && m_zmq_events.connected()) {
                 setIntegerParam(P_ZMQConnected, 1);
                 m_connected = true;
             } else {

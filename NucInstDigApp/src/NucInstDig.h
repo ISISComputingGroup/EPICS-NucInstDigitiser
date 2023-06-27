@@ -132,6 +132,7 @@ public:
  	static void pollerThreadC3(void* arg);
  	static void pollerThreadC4(void* arg);
  	static void pollerThreadC5(void* arg);
+ 	static void pollerThreadC6(void* arg);
     static void zmqMonitorPollerC(void* arg);
 
     // These are the methods that we override from asynPortDriver
@@ -170,8 +171,12 @@ private:
     int P_traceX[4]; // realarray
     int P_traceY[4]; // realarray
     int P_traceIdx[4]; // int
+    int P_TOFSpecIdx[4]; // int
+    int P_TOFSpecX[4]; // realarray
+    int P_TOFSpecY[4]; // realarray
     int P_readDCSpectra; // int
     int P_readEvents; // int
+    int P_readTOFSpectra; // int
     int P_configDGTZ; // int
     int P_configBASE; // int
     int P_configHV; // int
@@ -185,22 +190,28 @@ private:
 
     NDArray* m_pTraces;
     NDArray* m_pDCSpectra;
+    NDArray* m_pTOFSpectra;
     NDArray* m_pRaw;
     
     epicsMutex m_dcLock;
     epicsMutex m_tracesLock;
+    epicsMutex m_TOFSpectraLock;
     epicsMutex m_executeLock;
     
     std::vector<double> m_traces;
     std::vector<double> m_dcSpectra;
+    std::vector<double> m_TOFSpectra;
     size_t m_NTRACE;
     size_t m_nDCSpec;
     size_t m_nDCPts;
     size_t m_nVoltage;
+    size_t m_nTOFPts;
+    size_t m_nTOFSpec;
     
     void updateTraces();
     void updateEvents();
     void updateDCSpectra();
+    void updateTOFSpectra();
     void updateAD();
     void zmqMonitorPoller();
     void execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2, rapidjson::Document& doc_recv);
@@ -223,19 +234,22 @@ private:
 	void pollerThread3();
 	void pollerThread4();
 	void pollerThread5();
+	void pollerThread6();
     void readData2d(const std::string& name, const std::string& args, std::vector<double>& dataOut, size_t& nspec, size_t& npts);
     void setADAcquire(int addr, int acquire);
     int computeImage(int addr, const std::vector<double>& data, int nx, int ny);
     template <typename epicsType> 
          int computeArray(int addr, const std::vector<double>& data, int maxSizeX, int maxSizeY);
 
-    
     std::vector<double> m_traceX[4];
     std::vector<double> m_traceY[4];
     int m_traceIdx[4];
     std::vector<double> m_DCSpecX[4];
     std::vector<double> m_DCSpecY[4];
     int m_DCSpecIdx[4];
+    std::vector<double> m_TOFSpecX[4];
+    std::vector<double> m_TOFSpecY[4];
+    int m_TOFSpecIdx[4];
     
     int m_dig_idx;
 };
@@ -254,11 +268,15 @@ private:
 #define P_resetDCSpectraString	    "RESET_DC_SPECTRA"
 #define P_readDCSpectraString	    "READ_DC_SPECTRA"
 #define P_readEventsString          "READ_EVENTS"
+#define P_readTOFSpectraString	    "READ_TOF_SPECTRA"
 #define P_DCSpecXString             "DCSPEC%dX"
 #define P_DCSpecYString             "DCSPEC%dY"
 #define P_DCSpecIdxString           "DCSPEC%dIDX"
 #define P_traceXString              "TRACE%dX"
 #define P_traceYString              "TRACE%dY"
 #define P_traceIdxString            "TRACE%dIDX"
+#define P_TOFSpecXString            "TOFSPEC%dX"
+#define P_TOFSpecYString            "TOFSPEC%dY"
+#define P_TOFSpecIdxString          "TOFSPEC%dIDX"
 
 #endif /* NUCINSTDIG_H */

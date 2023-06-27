@@ -21,6 +21,7 @@ record(dfanout, "$(P)$(Q)_START:SP")
     field(VAL, "1")
     field(OUTA,  "$(P)$(Q)AD1:Acquire PP")
     field(OUTB,  "$(P)$(Q)AD2:Acquire PP")
+    field(OUTC,  "$(P)$(Q)AD3:Acquire PP")
 }
 
 record(dfanout, "$(P)$(Q)_STOP:SP")
@@ -28,6 +29,7 @@ record(dfanout, "$(P)$(Q)_STOP:SP")
     field(VAL, "0")
     field(OUTA,  "$(P)$(Q)AD1:Acquire PP")
     field(OUTB,  "$(P)$(Q)AD2:Acquire PP")
+    field(OUTC,  "$(P)$(Q)AD3:Acquire PP")
 }
 
 record(bo, "$(P)$(Q)CONFIG:DGTZ:SP")
@@ -84,6 +86,25 @@ record(bi, "$(P)$(Q)READ_DC_SPECTRA")
 {
     field(DTYP, "asynInt32")
     field(INP,  "@asyn($(PORT),0,0)READ_DC_SPECTRA")
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(SCAN, "I/O Intr")
+}
+
+record(bo, "$(P)$(Q)READ_TOF_SPECTRA:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)READ_TOF_SPECTRA")
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(PINI, "YES")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(Q)READ_TOF_SPECTRA")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0,0)READ_TOF_SPECTRA")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 	field(SCAN, "I/O Intr")

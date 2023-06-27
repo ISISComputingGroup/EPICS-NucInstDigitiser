@@ -1,0 +1,35 @@
+record(waveform, "$(P)$(Q)TOFSPEC$(N):X")
+{
+    field(DESC, "Spectrum Numbers")
+    field(NELM, "25000")
+    field(FTVL, "DOUBLE")
+    field(DTYP, "asynFloat64ArrayIn")
+    field(INP,  "@asyn($(PORT),0,0)TOFSPEC$(N)X")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(Q)TOFSPEC$(N):Y")
+{
+    field(DESC, "Spectrum Numbers")
+    field(NELM, "25000")
+    field(FTVL, "DOUBLE")
+    field(DTYP, "asynFloat64ArrayIn")
+    field(INP,  "@asyn($(PORT),0,0)TOFSPEC$(N)Y")
+    field(SCAN, "I/O Intr")
+}
+
+record(longout, "$(P)$(Q)TOFSPEC$(N):IDX")
+{
+    field(DESC, "Spectrum Numbers")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)TOFSPEC$(N)IDX")
+	field(PINI, "YES")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(Q)TOFSPEC$(N):UPDATING")
+{
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(INP, "$(P)$(Q)READ_TOF_SPECTRA CP")
+}

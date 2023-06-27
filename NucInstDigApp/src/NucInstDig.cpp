@@ -249,6 +249,10 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
             int idx = function - P_traceIdx[0];
             m_traceIdx[idx] = value;
         }
+        else if (function >= P_TOFSpecIdx[0] && function <= P_TOFSpecIdx[3]) {
+            int idx = function - P_TOFSpecIdx[0];
+            m_TOFSpecIdx[idx] = value;
+        }
         else
         {
             auto it = m_param_data.find(function);
@@ -553,8 +557,10 @@ void NucInstDig::updateAD()
 				acquiring = enable = 0;
                 if (i == 0) {
                     getIntegerParam(P_readDCSpectra, &enable);
-                } else {
+                } else if (i == 1) {
                     enable = 1; // traces always enabled
+                } else if (i == 2) {
+                    getIntegerParam(P_readTOFSpectra, &enable);
                 }
 				getIntegerParam(i, ADAcquire, &acquiring);
 				getDoubleParam(i, ADAcquirePeriod, &acquirePeriod);
@@ -590,6 +596,10 @@ void NucInstDig::updateAD()
                 else if (i == 1) {
                     epicsGuard<epicsMutex> _lock(m_tracesLock);
 				    status = computeImage(i, m_traces, m_nVoltage, m_NTRACE);
+                }
+                else if (i == 2) {
+                    epicsGuard<epicsMutex> _lock(m_TOFSpectraLock);
+				    status = computeImage(i, m_TOFSpectra, m_nTOFPts, m_nTOFSpec);
                 }
 
 	//            if (status) continue;
@@ -1015,6 +1025,53 @@ void NucInstDig::updateDCSpectra()
     }
 }
     
+void NucInstDig::updateTOFSpectra()
+{
+    while(true)
+    {
+        int read_spectra = 0;
+        epicsThreadSleep(1.0);
+        lock();
+        getIntegerParam(P_readTOFSpectra, &read_spectra);
+        unlock();
+        if (read_spectra == 0) {
+            continue;
+        }
+        try {
+            {
+                epicsGuard<epicsMutex> _lock(m_TOFSpectraLock);
+                readData2d("get_tof_spectra", "", m_TOFSpectra, m_nTOFSpec, m_nTOFPts);
+            }
+            for(size_t j=0; j<4; ++j) {
+                int idx = m_TOFSpecIdx[j];
+                if (idx >= 0 && idx < m_nTOFSpec) {
+                    m_TOFSpecX[j].resize(m_nTOFPts);
+                    m_TOFSpecY[j].resize(m_nTOFPts);
+                    for(int k=0; k<m_nTOFPts; ++k) {
+                        m_TOFSpecX[j][k] = k;
+                        m_TOFSpecY[j][k] = m_TOFSpectra[idx * m_nTOFPts + k];
+                    }
+                    epicsGuard<NucInstDig> _lock2(*this);
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_TOFSpecX[j].data()), m_TOFSpecX[j].size(), P_TOFSpecX[j], 0);
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_TOFSpecY[j].data()), m_TOFSpecY[j].size(), P_TOFSpecY[j], 0);
+                }
+            }
+        }
+        catch(const std::exception& ex)
+        {
+            std::cerr << "update TOF spectra " << ex.what() << std::endl;
+            epicsThreadSleep(3.0);            
+        }
+        catch(...)
+        {
+            std::cerr << "update TOF spectra exception"  << std::endl;
+            epicsThreadSleep(3.0);            
+        }
+    }
+}
+
+
+
 void NucInstDig::updateEvents()
 {
     while(true)
@@ -1207,7 +1264,7 @@ void NucInstDig::createNParams(const char* name, asynParamType type, int* param,
 /// \param[in] dcomint DCOM interface pointer created by lvDCOMConfigure()
 /// \param[in] portName @copydoc initArg0
 NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_idx)
-   : ADDriver(portName, 2, 100,
+   : ADDriver(portName, 3, 100,
 					0, // maxBuffers
 					0, // maxMemory
                     asynInt32Mask | asynInt32ArrayMask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
@@ -1219,8 +1276,8 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_zmq_events(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5555"),
                      m_zmq_cmd(zmq::socket_type::req, std::string("tcp://") + targetAddress + ":5557"),
                      m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556"),
-                     m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pRaw(NULL),
-                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_connected(false)
+                     m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL), m_pRaw(NULL),
+                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false)
 {					
     const char *functionName = "NucInstDig";
 
@@ -1241,8 +1298,12 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     createNParams(P_traceXString, asynParamFloat64Array, P_traceX, 4);
     createNParams(P_traceYString, asynParamFloat64Array, P_traceY, 4);
     createNParams(P_traceIdxString, asynParamInt32, P_traceIdx, 4);
+    createNParams(P_TOFSpecXString, asynParamFloat64Array, P_TOFSpecX, 4);
+    createNParams(P_TOFSpecYString, asynParamFloat64Array, P_TOFSpecY, 4);
+    createNParams(P_TOFSpecIdxString, asynParamInt32, P_TOFSpecIdx, 4);
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
+    createParam(P_readTOFSpectraString, asynParamInt32, &P_readTOFSpectra);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
     
     setStringParam(P_setupFile, "");
@@ -1253,7 +1314,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
 	//int maxSizes[2][2] = { {16, 20000}, { 16, 4096 } };
     NDDataType_t dataType = NDFloat64; // data type for each frame
     int status = 0;
-    for(int i=0; i<2; ++i)
+    for(int i=0; i<maxAddr; ++i)
     {
         //int maxSizeX = maxSizes[i][0];
         //int maxSizeY = maxSizes[i][1];
@@ -1336,6 +1397,14 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
         printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
         return;
     }
+    if (epicsThreadCreate("NucInstDigPoller6",
+                          epicsThreadPriorityMedium,
+                          epicsThreadGetStackSize(epicsThreadStackMedium),
+                          (EPICSTHREADFUNC)pollerThreadC6, this) == 0)
+    {
+        printf("%s:%s: epicsThreadCreate failure\n", driverName, functionName);
+        return;
+    }
 }
 
 void NucInstDig::pollerThreadC1(void* arg)
@@ -1380,6 +1449,15 @@ void NucInstDig::pollerThreadC5(void* arg)
 	if (driver != NULL)
 	{
 	    driver->pollerThread5();
+	}
+}
+
+void NucInstDig::pollerThreadC6(void* arg)
+{
+    NucInstDig* driver = (NucInstDig*)arg;
+	if (driver != NULL)
+	{
+	    driver->pollerThread6();
 	}
 }
 
@@ -1474,6 +1552,12 @@ void NucInstDig::pollerThread5()
 {
     static const char* functionName = "NucInstDigPoller5";
     updateAD();
+}
+
+void NucInstDig::pollerThread6()
+{
+    static const char* functionName = "NucInstDigPoller6";
+    updateTOFSpectra();
 }
 
 void NucInstDig::zmqMonitorPoller()

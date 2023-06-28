@@ -181,6 +181,7 @@ private:
     int P_configBASE; // int
     int P_configHV; // int
     int P_configSTAVES; // int
+    int P_resetTOFSpectra; // int
     int P_resetDCSpectra; // int
     
     std::map<int, ParamData*> m_param_data;
@@ -268,6 +269,7 @@ private:
 #define P_resetDCSpectraString	    "RESET_DC_SPECTRA"
 #define P_readDCSpectraString	    "READ_DC_SPECTRA"
 #define P_readEventsString          "READ_EVENTS"
+#define P_resetTOFSpectraString	    "RESET_TOF_SPECTRA"
 #define P_readTOFSpectraString	    "READ_TOF_SPECTRA"
 #define P_DCSpecXString             "DCSPEC%dX"
 #define P_DCSpecYString             "DCSPEC%dY"

@@ -226,6 +226,9 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
         else if (function == P_resetDCSpectra) {
             executeCmd("reset_darkcount_spectra", "");
         }
+        else if (function == P_resetTOFSpectra) {
+            executeCmd("reset_tof_spectra", "");
+        }
         else if (function == P_configDGTZ) {
             executeCmd("configure_dgtz", "");
         }
@@ -1304,6 +1307,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
     createParam(P_readTOFSpectraString, asynParamInt32, &P_readTOFSpectra);
+    createParam(P_resetTOFSpectraString, asynParamInt32, &P_resetTOFSpectra);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
     
     setStringParam(P_setupFile, "");

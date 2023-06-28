@@ -30,6 +30,15 @@ record(dfanout, "$(P)$(Q)_STOP:SP")
     field(OUTA,  "$(P)$(Q)AD1:Acquire PP")
     field(OUTB,  "$(P)$(Q)AD2:Acquire PP")
     field(OUTC,  "$(P)$(Q)AD3:Acquire PP")
+	field(FLNK, "$(P)$(Q)_SAVEFILE:SP")
+}
+
+record(dfanout, "$(P)$(Q)_SAVEFILE:SP")
+{
+    field(VAL, "1")
+    field(OUTA,  "$(P)$(Q)AD1:FILE:WriteFile PP")
+    field(OUTB,  "$(P)$(Q)AD2:FILE:WriteFile PP")
+    field(OUTC,  "$(P)$(Q)AD3:FILE:WriteFile PP")
 }
 
 record(bo, "$(P)$(Q)CONFIG:DGTZ:SP")
@@ -90,6 +99,14 @@ record(bi, "$(P)$(Q)READ_DC_SPECTRA")
 	field(ONAM, "YES")
 	field(SCAN, "I/O Intr")
 }
+
+record(bo, "$(P)$(Q)RESET_TOF_SPECTRA:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)RESET_TOF_SPECTRA")
+	field(UDFS, "NO_ALARM")
+}
+alias("$(P)$(Q)RESET_TOF_SPECTRA:SP", "$(P)$(Q)RESET_TOF_SPECTRA")
 
 record(bo, "$(P)$(Q)READ_TOF_SPECTRA:SP")
 {

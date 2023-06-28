@@ -19,9 +19,11 @@ alias("$(P)$(Q)STOP:SP", "$(P)$(Q)STOP")
 record(dfanout, "$(P)$(Q)_START:SP")
 {
     field(VAL, "1")
-    field(OUTA,  "$(P)$(Q)AD1:Acquire PP")
-    field(OUTB,  "$(P)$(Q)AD2:Acquire PP")
-    field(OUTC,  "$(P)$(Q)AD3:Acquire PP")
+    field(OUTA, "$(P)$(Q)RESET_DC_SPECTRA:SP PP")
+    field(OUTB, "$(P)$(Q)RESET_TOF_SPECTRA:SP PP")
+    field(OUTC,  "$(P)$(Q)AD1:Acquire PP")
+    field(OUTD,  "$(P)$(Q)AD2:Acquire PP")
+    field(OUTE,  "$(P)$(Q)AD3:Acquire PP")
 }
 
 record(dfanout, "$(P)$(Q)_STOP:SP")

@@ -208,10 +208,14 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
         if (function == ADAcquire)
         {            
             setADAcquire(addr, value);
+            if (m_dig_id == 0) {
+                setADAcquire(addr + 3, value);
+            }
             // fall through to next line to call base class
         }
         if (function < FIRST_NUCINSTDIG_PARAM)
         {
+            // call for addr  + 3 ?
             return ADDriver::writeInt32(pasynUser, value);
         }
         asynStatus stat = asynSuccess;
@@ -530,6 +534,51 @@ void NucInstDig::updateTraces()
     }
 }
 
+// assumes data is a histogram with boundaries specified and equially spaces
+int NucInstDig::rebin(const double* data_in, double xmin_in, double xmax_in, int nin,
+                      double* data_out, double xmin_out, double xmax_out, int nout)
+{
+    std::fill(data_out, data_out + nout, 0.0);
+    int i = 0, j = 0;
+    double xstep_in = (xmax_in - xmin_in) / nin;
+    double xstep_out = (xmax_out - xmin_out) / nout;
+    while(i < nin && j < nout) {
+        double xin_low = i * xstep_in;
+        double xin_high = (i + 1) * xstep_in;
+        double xout_low = j * xstep_out;
+        double xout_high = (j + 1) * xstep_out;
+        if ( xout_high <= xin_low )
+        {
+            j++;		/* old and new bins do not overlap */
+        }
+        else if ( xin_high <= xout_low )
+        {
+            i++;		/* old and new bins do not overlap */
+        }
+        else
+        {
+            /*
+             *        delta is the overlap of the bins on axis
+             */
+            double delta = std::min(xin_high, xout_high) - std::max(xin_low, xout_low);
+            if ( delta <= 0.0 )
+            {
+                std::cerr << "REBIN: error - no bin overlap detected" << std::endl;
+                return -1;
+            }
+            data_out[j] += data_in[i] * delta;
+            if ( xout_high > xin_high )
+            {
+                i++;
+            }
+            else
+            {
+                j++;
+            }
+        }
+    }
+    return 0;
+}
 
 void NucInstDig::updateAD()
 {
@@ -552,7 +601,7 @@ void NucInstDig::updateAD()
 	while(true)
 	{
 		all_acquiring = all_enable = 0;
-		for(int i=0; i<maxAddr; ++i)
+		for(int i=0; i<maxAddr; ++i) // we use maxAddr but upper 3 just forward combined spectra NDarrays and are not enabled here
 		{
 		    epicsGuard<NucInstDig> _lock(*this);
 			try 
@@ -648,6 +697,11 @@ void NucInstDig::updateAD()
 				  asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
 						"%s:%s: calling imageData callback addr %d\n", driverName, functionName, i);
 				  doCallbacksGenericPointer(pImage, NDArrayData, i);
+                  if (m_dig_id == 0) {
+                      epicsGuard<epicsMutex> _lock(g_digCombinedLock);
+                      this->getAttributes(g_rawCombined[i]->pAttributeList);
+                      doCallbacksGenericPointer(g_rawCombined[i] , NDArrayData, i + 3);
+                  }
 				}
 				epicsTimeGetCurrent(&endTime);
 				elapsedTime = epicsTimeDiffInSeconds(&endTime, &startTime);
@@ -655,6 +709,9 @@ void NucInstDig::updateAD()
 				last_update[i] = endTime;
 				/* Call the callbacks to update any changes */
 				callParamCallbacks(i, i);
+                if (m_dig_id == 0) {
+                    callParamCallbacks(i + 3, i + 3);
+                }
 				/* sleep for the acquire period minus elapsed time. */
 				delay = acquirePeriod - elapsedTime;
 				asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
@@ -689,7 +746,7 @@ void NucInstDig::updateAD()
 }
 
 /** Computes the new image data */
-int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, int ny)
+int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int nx, int ny)
 {
     int status = asynSuccess;
     NDDataType_t dataType;
@@ -703,8 +760,17 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
     size_t dims[3];
     NDArrayInfo_t arrayInfo;
     NDArray *pImage;
+    std::vector<double> data;
     const char* functionName = "computeImage";
-
+    
+    int nrebin = 2048;
+    data.resize(nrebin * ny);
+    for(int i=0; i<ny; ++i) {
+        if (rebin(&(data_in[i * nx]), 0.0, 200.0, nx, &(data[i * nrebin]), 0.0, 32.768, nrebin) != 0) {
+            return asynError;
+        }
+    }
+    nx = nrebin; // continue with new size
     /* NOTE: The caller of this function must have taken the mutex */
 
     status |= getIntegerParam(addr, ADBinX,         &binX);
@@ -907,6 +973,39 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                     "%s:%s: error setting parameters\n",
                     driverName, functionName);
+    // create combined 
+    epicsGuard<epicsMutex> _lock(g_digCombinedLock);
+    size_t ndig = g_dig_list.size();
+    NDArray*& pRawComb = g_rawCombined[addr];
+    NDArrayInfo arrayInfoComb;
+    if (pRawComb){
+        pRawComb->getInfo(&arrayInfoComb);
+        if (arrayInfoComb.totalBytes != ndig * arrayInfo.totalBytes) {
+            pRawComb->release();
+            pRawComb = NULL;
+        }
+    }
+    if (pRawComb == NULL) {
+        dims[arrayInfo.xDim] = arrayInfo.xSize;
+        dims[arrayInfo.yDim] = arrayInfo.ySize * ndig;
+        if (ndims > 2) dims[colorDim] = 3;
+        pRawComb = g_dig_list[0]->pNDArrayPool->alloc(ndims, dims, dataType, 0, NULL);
+    }
+    if (m_dig_id == 1000) {
+        pRawComb->getInfo(&arrayInfoComb);
+        status |= setIntegerParam(addr + 3, NDArraySize,  (int)arrayInfoComb.totalBytes);
+        status |= setIntegerParam(addr + 3, NDArraySizeX, (int)pRawComb->dims[xDim].size);
+        status |= setIntegerParam(addr + 3, NDArraySizeY, (int)pRawComb->dims[yDim].size);
+        status |= setIntegerParam(addr + 3, ADMaxSizeX, maxSizeX);
+        status |= setIntegerParam(addr + 3, ADMaxSizeY, maxSizeY * ndig);
+        status |= setIntegerParam(addr + 3, ADBinX, binX);
+        //status |= setIntegerParam(addr + 3, ADBinY, binY);
+        status |= setIntegerParam(addr + 3, ADMinX, minX);
+        //status |= setIntegerParam(addr + 3, ADMinY, minY);
+        status |= setIntegerParam(addr + 3, ADSizeX, sizeX);
+        status |= setIntegerParam(addr + 3, ADSizeY, sizeY * ndig);
+    }
+    memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pImage->pData, arrayInfo.totalBytes);
     return(status);
 }
 
@@ -1151,13 +1250,11 @@ void NucInstDig::readData2d(const std::string& name, const std::string& args, st
     }
 }
 
-void NucInstDig::getParameter(const std::string& name, rapidjson::Value& value, int idx)
+void NucInstDig::getParameter(const std::string& name, rapidjson::Document& doc_recv, int idx)
 {
     char idxStr[16];
-    rapidjson::Document doc_recv;
     sprintf(idxStr, "%d", idx);
     execute("get_parameter", name, idxStr, "", doc_recv);
-    value = doc_recv["value"];
 }
 
 void NucInstDig::setParameter(const std::string& name, const std::string& value, int idx)
@@ -1267,7 +1364,7 @@ void NucInstDig::createNParams(const char* name, asynParamType type, int* param,
 /// \param[in] dcomint DCOM interface pointer created by lvDCOMConfigure()
 /// \param[in] portName @copydoc initArg0
 NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_idx)
-   : ADDriver(portName, 3, 100,
+   : ADDriver(portName, 6, 100,
 					0, // maxBuffers
 					0, // maxMemory
                     asynInt32Mask | asynInt32ArrayMask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
@@ -1279,8 +1376,8 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_zmq_events(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5555"),
                      m_zmq_cmd(zmq::socket_type::req, std::string("tcp://") + targetAddress + ":5557"),
                      m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556"),
-                     m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL), m_pRaw(NULL),
-                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false)
+                     m_dig_idx(dig_idx), /*m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL),*/ m_pRaw(NULL),
+                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false), m_dig_id(-1)
 {					
     const char *functionName = "NucInstDig";
 
@@ -1488,8 +1585,9 @@ void NucInstDig::pollerThread1()
                 const ParamData* p = kv.second;
                 try
                 {
-                    rapidjson::Value value;
-                    getParameter(p->name, value, p->chan);
+                    rapidjson::Document doc_recv;
+                    getParameter(p->name, doc_recv, p->chan);
+                    rapidjson::Value& value = doc_recv["value"];
                     if (p->type == asynParamInt32)
                     {
                         setIntegerParam(kv.first, (value.IsInt() ? value.GetInt() : atoi(value.GetString())));
@@ -1640,6 +1738,7 @@ asynStatus NucInstDig::drvUserCreate(asynUser *pasynUser, const char* drvInfo, c
              if (findParam(param_name.c_str(), &param_index) == asynSuccess)
              {
                  pasynUser->reason = param_index;
+                 pasynUser->reason = param_index;
                  return asynSuccess;
              }
              if (split_vec[2] == "I")
@@ -1681,11 +1780,16 @@ asynStatus NucInstDig::drvUserDestroy(asynUser *pasynUser)
    return ADDriver::drvUserDestroy(pasynUser);
 }
 
+NDArray* NucInstDig::g_rawCombined[3]; 
+std::vector<NucInstDig*> NucInstDig::g_dig_list;
+epicsMutex NucInstDig::g_digCombinedLock;
+
 int nucInstDigConfigure(const char *portName, const char *targetAddress, int dig_idx)
 {
 	try
 	{
 		NucInstDig* iface = new NucInstDig(portName, targetAddress, dig_idx);
+        NucInstDig::addDigitiser(iface, dig_idx);
 		return(asynSuccess);
 	}
 	catch(const std::exception& ex)

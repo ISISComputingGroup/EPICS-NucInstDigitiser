@@ -6,7 +6,7 @@ include $(TOP)/configure/CONFIG
 #----------------------------------------------------
 # Create and install (or just install) into <top>/db
 # databases, templates, substitutions like this
-DB += NucInstDig.db
+DB += NucInstDig.db NucInstDigGlobal.db
 DB += NucInstDigDCSpec.db NucInstDigTrace.db NucInstDigTOFSpec.db
 DB += NucInstDigIntegerParam.db NucInstDigIntegerParamChan.db
 DB += NucInstDigRealParam.db NucInstDigRealParamChan.db

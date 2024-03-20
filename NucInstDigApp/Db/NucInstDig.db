@@ -7,6 +7,15 @@ record(bo, "$(P)$(Q)START:SP")
 }
 alias("$(P)$(Q)START:SP", "$(P)$(Q)START")
 
+
+record(printf, "$(P)$(Q)_SYNCFILENAME")
+{
+    field(INP0, "$(P)DAE:INSTNAME")
+    field(INP1, "$(P)DAE:RUNNUMBER")
+    field(FMT, "%s%s")
+	field(SIZV, "100")
+}
+
 record(bo, "$(P)$(Q)STOP:SP")
 {
     field(DTYP, "asynInt32")
@@ -24,6 +33,10 @@ record(dfanout, "$(P)$(Q)_START:SP")
     field(OUTC,  "$(P)$(Q)AD1:Acquire PP")
     field(OUTD,  "$(P)$(Q)AD2:Acquire PP")
     field(OUTE,  "$(P)$(Q)AD3:Acquire PP")
+$(IFDIG0=#)    field(OUTF,  "$(P)$(Q)AD4:Acquire PP")
+$(IFDIG0=#)    field(OUTG,  "$(P)$(Q)AD5:Acquire PP")
+$(IFDIG0=#)    field(OUTH,  "$(P)$(Q)AD6:Acquire PP")
+    field(FLNK, "$(P)$(Q)_SYNCFILENAME")
 }
 
 record(dfanout, "$(P)$(Q)_STOP:SP")
@@ -32,6 +45,9 @@ record(dfanout, "$(P)$(Q)_STOP:SP")
     field(OUTA,  "$(P)$(Q)AD1:Acquire PP")
     field(OUTB,  "$(P)$(Q)AD2:Acquire PP")
     field(OUTC,  "$(P)$(Q)AD3:Acquire PP")
+$(IFDIG0=#)    field(OUTD,  "$(P)$(Q)AD4:Acquire PP")
+$(IFDIG0=#)    field(OUTE,  "$(P)$(Q)AD5:Acquire PP")
+$(IFDIG0=#)    field(OUTF,  "$(P)$(Q)AD6:Acquire PP")
 	field(FLNK, "$(P)$(Q)_SAVEFILE:SP")
 }
 
@@ -41,6 +57,9 @@ record(dfanout, "$(P)$(Q)_SAVEFILE:SP")
     field(OUTA,  "$(P)$(Q)AD1:FILE:WriteFile PP")
     field(OUTB,  "$(P)$(Q)AD2:FILE:WriteFile PP")
     field(OUTC,  "$(P)$(Q)AD3:FILE:WriteFile PP")
+$(IFDIG0=#)    field(OUTD,  "$(P)$(Q)AD4:FILE:WriteFile PP")
+$(IFDIG0=#)    field(OUTE,  "$(P)$(Q)AD5:FILE:WriteFile PP")
+$(IFDIG0=#)    field(OUTF,  "$(P)$(Q)AD6:FILE:WriteFile PP")
 }
 
 record(bo, "$(P)$(Q)CONFIG:DGTZ:SP")

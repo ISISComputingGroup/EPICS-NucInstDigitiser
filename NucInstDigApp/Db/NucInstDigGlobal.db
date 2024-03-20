@@ -1,0 +1,38 @@
+record(bo, "$(P)$(Q)STARTALL:SP")
+{
+	field(FLNK, "$(P)$(Q)_STARTALL:SP.PROC")
+}
+alias("$(P)$(Q)STARTALL:SP", "$(P)$(Q)STARTALL")
+
+record(dfanout, "$(P)$(Q)_STARTALL:SP")
+{
+    field(VAL, "1")
+$(IFDIG0=#)    field(OUTA, "$(P)$(Q)D0:START:SP PP")
+$(IFDIG1=#)    field(OUTB, "$(P)$(Q)D1:START:SP PP")
+$(IFDIG2=#)    field(OUTC, "$(P)$(Q)D2:START:SP PP")
+$(IFDIG3=#)    field(OUTD, "$(P)$(Q)D3:START:SP PP")
+$(IFDIG4=#)    field(OUTE, "$(P)$(Q)D4:START:SP PP")
+$(IFDIG5=#)    field(OUTF, "$(P)$(Q)D5:START:SP PP")
+$(IFDIG6=#)    field(OUTG, "$(P)$(Q)D6:START:SP PP")
+$(IFDIG7=#)    field(OUTH, "$(P)$(Q)D7:START:SP PP")
+}
+
+record(bo, "$(P)$(Q)STOPALL:SP")
+{
+	field(FLNK, "$(P)$(Q)_STOPALL:SP.PROC")
+}
+alias("$(P)$(Q)STOPALL:SP", "$(P)$(Q)STOPALL")
+
+record(dfanout, "$(P)$(Q)_STOPALL:SP")
+{
+    field(VAL, "1")
+$(IFDIG0=#)    field(OUTA, "$(P)$(Q)D0:STOP:SP PP")
+$(IFDIG1=#)    field(OUTB, "$(P)$(Q)D1:STOP:SP PP")
+$(IFDIG2=#)    field(OUTC, "$(P)$(Q)D2:STOP:SP PP")
+$(IFDIG3=#)    field(OUTD, "$(P)$(Q)D3:STOP:SP PP")
+$(IFDIG4=#)    field(OUTE, "$(P)$(Q)D4:STOP:SP PP")
+$(IFDIG5=#)    field(OUTF, "$(P)$(Q)D5:STOP:SP PP")
+$(IFDIG6=#)    field(OUTG, "$(P)$(Q)D6:STOP:SP PP")
+$(IFDIG7=#)    field(OUTH, "$(P)$(Q)D7:STOP:SP PP")
+}
+

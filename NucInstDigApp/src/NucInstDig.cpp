@@ -206,16 +206,12 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
 	getParamName(function, &paramName);
     try {
         if (function == ADAcquire)
-        {            
+        {
             setADAcquire(addr, value);
-            if (m_dig_id == 0) {
-                setADAcquire(addr + 3, value);
-            }
             // fall through to next line to call base class
         }
         if (function < FIRST_NUCINSTDIG_PARAM)
         {
-            // call for addr  + 3 ?
             return ADDriver::writeInt32(pasynUser, value);
         }
         asynStatus stat = asynSuccess;
@@ -614,6 +610,7 @@ void NucInstDig::updateAD()
                 } else if (i == 2) {
                     getIntegerParam(P_readTOFSpectra, &enable);
                 }
+                // addr 3,4,5 should always be disabled 
 				getIntegerParam(i, ADAcquire, &acquiring);
 				getDoubleParam(i, ADAcquirePeriod, &acquirePeriod);
 				
@@ -631,6 +628,9 @@ void NucInstDig::updateAD()
 					old_acquiring[i] = acquiring;
 				}
 				setIntegerParam(i, ADStatus, ADStatusAcquire); 
+                if (m_dig_id == 0) {
+				    setIntegerParam(i + 3, ADStatus, ADStatusAcquire); 
+                }
 				epicsTimeGetCurrent(&startTime);
 				getIntegerParam(i, ADImageMode, &imageMode);
 
@@ -639,6 +639,10 @@ void NucInstDig::updateAD()
 
 				setShutter(i, ADShutterOpen);
 				callParamCallbacks(i, i);
+                if (m_dig_id == 0) {
+				    setShutter(i + 3, ADShutterOpen);
+				    callParamCallbacks(i + 3, i + 3);
+                }
 				
 				/* Update the image */
                 if (i == 0) {
@@ -664,6 +668,11 @@ void NucInstDig::updateAD()
 				setIntegerParam(i, ADStatus, ADStatusReadout);
 				/* Call the callbacks to update any changes */
 				callParamCallbacks(i, i);
+                if (m_dig_id == 0) {
+				    setShutter(i + 3, ADShutterClosed);
+				    setIntegerParam(i + 3, ADStatus, ADStatusReadout);
+				    callParamCallbacks(i + 3, i + 3);
+                }
 
 				pImage = this->pArrays[i];
 				if (pImage == NULL)
@@ -680,7 +689,10 @@ void NucInstDig::updateAD()
 				++numImagesCounter;
 				setIntegerParam(i, NDArrayCounter, imageCounter);
 				setIntegerParam(i, ADNumImagesCounter, numImagesCounter);
-
+                if (m_dig_id == 0) {
+				    setIntegerParam(i + 3, NDArrayCounter, imageCounter);
+				    setIntegerParam(i + 3, ADNumImagesCounter, numImagesCounter);
+                }
 				/* Put the frame number and time stamp into the buffer */
 				pImage->uniqueId = imageCounter;
 				pImage->timeStamp = startTime.secPastEpoch + startTime.nsec / 1.e9;
@@ -697,10 +709,15 @@ void NucInstDig::updateAD()
 				  asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
 						"%s:%s: calling imageData callback addr %d\n", driverName, functionName, i);
 				  doCallbacksGenericPointer(pImage, NDArrayData, i);
-                  if (m_dig_id == 0) {
+                  NDArray* pRawComb = g_rawCombined[i];
+                  if (m_dig_id == 0 && pRawComb != NULL) {
                       epicsGuard<epicsMutex> _lock(g_digCombinedLock);
-                      this->getAttributes(g_rawCombined[i]->pAttributeList);
-                      doCallbacksGenericPointer(g_rawCombined[i] , NDArrayData, i + 3);
+				      /* Put the frame number and time stamp into the buffer */
+				      pRawComb->uniqueId = imageCounter;
+				      pRawComb->timeStamp = startTime.secPastEpoch + startTime.nsec / 1.e9;
+				      updateTimeStamp(&pRawComb->epicsTS);
+                      this->getAttributes(pRawComb->pAttributeList);
+                      doCallbacksGenericPointer(pRawComb , NDArrayData, i + 3);
                   }
 				}
 				epicsTimeGetCurrent(&endTime);
@@ -749,7 +766,7 @@ void NucInstDig::updateAD()
 int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int nx, int ny)
 {
     int status = asynSuccess;
-    NDDataType_t dataType;
+    NDDataType_t dataType, dataTypeComb;
     int itemp;
     int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY;
     int xDim=0, yDim=1, colorDim=-1;
@@ -763,14 +780,6 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
     std::vector<double> data;
     const char* functionName = "computeImage";
     
-    int nrebin = 2048;
-    data.resize(nrebin * ny);
-    for(int i=0; i<ny; ++i) {
-        if (rebin(&(data_in[i * nx]), 0.0, 200.0, nx, &(data[i * nrebin]), 0.0, 32.768, nrebin) != 0) {
-            return asynError;
-        }
-    }
-    nx = nrebin; // continue with new size
     /* NOTE: The caller of this function must have taken the mutex */
 
     status |= getIntegerParam(addr, ADBinX,         &binX);
@@ -786,6 +795,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
     status |= getIntegerParam(addr, NDColorMode,    &colorMode);
     status |= getIntegerParam(addr, NDDataType,     &itemp); 
 	dataType = (NDDataType_t)itemp;
+    dataTypeComb = dataType;
 	if (status)
 	{
 		asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
@@ -793,6 +803,22 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
 			driverName, functionName);
 		return (status);
 	}
+    if (addr == 2) { // TOF spectra 
+        int nrebin = 2048;
+        data.resize(nrebin * ny);
+        for(int i=0; i<ny; ++i) {
+            if (rebin(&(data_in[i * nx]), 0.0, 200.0, nx, &(data[i * nrebin]), 0.0, 32.768, nrebin) != 0) {
+                std::cerr << "rebin error" << std::endl;
+                return asynError;
+            }
+        }
+        nx = nrebin; // continue with new size
+        dataTypeComb = NDInt32;
+    }
+    else {
+        data = data_in;
+    }
+    
     if (maxSizeX != nx)
     {
         maxSizeX = nx;
@@ -980,18 +1006,23 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
     NDArrayInfo arrayInfoComb;
     if (pRawComb){
         pRawComb->getInfo(&arrayInfoComb);
-        if (arrayInfoComb.totalBytes != ndig * arrayInfo.totalBytes) {
+        if (arrayInfoComb.xSize != arrayInfo.xSize || arrayInfoComb.ySize != arrayInfo.ySize * ndig) {
             pRawComb->release();
             pRawComb = NULL;
         }
     }
+    if (pRawComb == NULL && m_dig_id != 0) {
+        return status;
+    }
     if (pRawComb == NULL) {
         dims[arrayInfo.xDim] = arrayInfo.xSize;
         dims[arrayInfo.yDim] = arrayInfo.ySize * ndig;
-        if (ndims > 2) dims[colorDim] = 3;
-        pRawComb = g_dig_list[0]->pNDArrayPool->alloc(ndims, dims, dataType, 0, NULL);
+        dims[2] = 1;
+        pRawComb = g_dig_list[0]->pNDArrayPool->alloc(3, dims, dataTypeComb, 0, NULL);
+        pRawComb->getInfo(&arrayInfoComb);
+        memset(pRawComb->pData, 0, arrayInfoComb.totalBytes);
     }
-    if (m_dig_id == 1000) {
+    if (m_dig_id == 0) {
         pRawComb->getInfo(&arrayInfoComb);
         status |= setIntegerParam(addr + 3, NDArraySize,  (int)arrayInfoComb.totalBytes);
         status |= setIntegerParam(addr + 3, NDArraySizeX, (int)pRawComb->dims[xDim].size);
@@ -999,17 +1030,24 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
         status |= setIntegerParam(addr + 3, ADMaxSizeX, maxSizeX);
         status |= setIntegerParam(addr + 3, ADMaxSizeY, maxSizeY * ndig);
         status |= setIntegerParam(addr + 3, ADBinX, binX);
-        //status |= setIntegerParam(addr + 3, ADBinY, binY);
+        status |= setIntegerParam(addr + 3, ADBinY, binY);
         status |= setIntegerParam(addr + 3, ADMinX, minX);
-        //status |= setIntegerParam(addr + 3, ADMinY, minY);
+        status |= setIntegerParam(addr + 3, ADMinY, minY);
         status |= setIntegerParam(addr + 3, ADSizeX, sizeX);
         status |= setIntegerParam(addr + 3, ADSizeY, sizeY * ndig);
+        status |= setIntegerParam(addr + 3, NDDataType, dataTypeComb); 
     }
-    memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pImage->pData, arrayInfo.totalBytes);
+    if (dataType == dataTypeComb) {
+        memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pImage->pData, arrayInfo.totalBytes);
+    } else {
+        NDArray* pTemp = NULL;
+        this->pNDArrayPool->convert(m_pRaw, &pTemp, dataTypeComb, dimsOut);
+        pTemp->getInfo(&arrayInfo);
+        memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pTemp->pData, arrayInfo.totalBytes);
+        pTemp->release();
+    }
     return(status);
 }
-
-
 
 // supplied array of x,y,t
 template <typename epicsType> 

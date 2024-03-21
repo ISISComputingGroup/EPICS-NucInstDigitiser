@@ -777,7 +777,6 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
     size_t dims[3];
     NDArrayInfo_t arrayInfo;
     NDArray *pImage;
-    std::vector<double> data;
     const char* functionName = "computeImage";
     
     /* NOTE: The caller of this function must have taken the mutex */
@@ -795,7 +794,6 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
     status |= getIntegerParam(addr, NDColorMode,    &colorMode);
     status |= getIntegerParam(addr, NDDataType,     &itemp); 
 	dataType = (NDDataType_t)itemp;
-    dataTypeComb = dataType;
 	if (status)
 	{
 		asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
@@ -803,21 +801,6 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
 			driverName, functionName);
 		return (status);
 	}
-    if (addr == 2) { // TOF spectra 
-        int nrebin = 2048;
-        data.resize(nrebin * ny);
-        for(int i=0; i<ny; ++i) {
-            if (rebin(&(data_in[i * nx]), 0.0, 200.0, nx, &(data[i * nrebin]), 0.0, 32.768, nrebin) != 0) {
-                std::cerr << "rebin error" << std::endl;
-                return asynError;
-            }
-        }
-        nx = nrebin; // continue with new size
-        dataTypeComb = NDInt32;
-    }
-    else {
-        data = data_in;
-    }
     
     if (maxSizeX != nx)
     {
@@ -931,38 +914,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
         }
 //    }
 
-    switch (dataType) {
-        case NDInt8:
-            status |= computeArray<epicsInt8>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt8:
-            status |= computeArray<epicsUInt8>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDInt16:
-            status |= computeArray<epicsInt16>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt16:
-            status |= computeArray<epicsUInt16>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDInt32:
-            status |= computeArray<epicsInt32>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt32:
-            status |= computeArray<epicsUInt32>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDInt64:
-            status |= computeArray<epicsInt64>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt64:
-            status |= computeArray<epicsUInt64>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDFloat32:
-            status |= computeArray<epicsFloat32>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDFloat64:
-            status |= computeArray<epicsFloat64>(addr, data, maxSizeX, maxSizeY);
-            break;
-    }
+    status |= callComputeArray(dataType, addr, data_in, maxSizeX, maxSizeY);
 
     /* Extract the region of interest with binning.
      * If the entire image is being used (no ROI or binning) that's OK because
@@ -990,6 +942,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
                     driverName, functionName);
         return(status);
     }
+    bool freepImage = false;
     pImage = this->pArrays[addr];
     pImage->getInfo(&arrayInfo);
     status = asynSuccess;
@@ -999,7 +952,55 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                     "%s:%s: error setting parameters\n",
                     driverName, functionName);
-    // create combined 
+
+    // create combined accross digitisers array
+    dataTypeComb = dataType;
+    if (addr == 2) { // TOF spectra 
+        std::vector<double> data;
+        int nrebin = 2048;
+        data.resize(nrebin * ny);
+        for(int i=0; i<ny; ++i) {
+            if (rebin(&(data_in[i * nx]), 0.0, nx, nx, &(data[i * nrebin]), 0.0, 32768, nrebin) != 0) {
+                std::cerr << "rebin error" << std::endl;
+                return asynError;
+            }
+        }
+        nx = nrebin; // continue with new size
+        dataTypeComb = NDInt32;
+        if (m_pRaw) m_pRaw->release();
+        /* Allocate the raw buffer we use to compute images. */
+        dims[xDim] = nx;
+        dims[yDim] = ny;
+        if (ndims > 2) dims[colorDim] = 3;
+        m_pRaw = this->pNDArrayPool->alloc(ndims, dims, dataTypeComb, 0, NULL);
+        if (!m_pRaw) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                      "%s:%s: error allocating raw buffer\n",
+                      driverName, functionName);
+            return(status);
+        }
+        status |= callComputeArray(dataTypeComb, addr, data, nx, ny);
+
+        /* Extract the region of interest with binning.
+         * If the entire image is being used (no ROI or binning) that's OK because
+         * convertImage detects that case and is very efficient */
+        m_pRaw->initDimension(&dimsOut[xDim], nx);
+        m_pRaw->initDimension(&dimsOut[yDim], ny);
+        if (ndims > 2) m_pRaw->initDimension(&dimsOut[colorDim], 3);
+        pImage = NULL;
+        status |= this->pNDArrayPool->convert(m_pRaw,
+                                         &pImage,
+                                         dataTypeComb,
+                                         dimsOut);
+        if (status) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                    "%s:%s: error allocating buffer in convert()\n",
+                    driverName, functionName);
+            return(status);
+        }
+        pImage->getInfo(&arrayInfo);
+        freepImage = true;
+    }
     epicsGuard<epicsMutex> _lock(g_digCombinedLock);
     size_t ndig = g_dig_list.size();
     NDArray*& pRawComb = g_rawCombined[addr];
@@ -1027,26 +1028,60 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int n
         status |= setIntegerParam(addr + 3, NDArraySize,  (int)arrayInfoComb.totalBytes);
         status |= setIntegerParam(addr + 3, NDArraySizeX, (int)pRawComb->dims[xDim].size);
         status |= setIntegerParam(addr + 3, NDArraySizeY, (int)pRawComb->dims[yDim].size);
-        status |= setIntegerParam(addr + 3, ADMaxSizeX, maxSizeX);
-        status |= setIntegerParam(addr + 3, ADMaxSizeY, maxSizeY * ndig);
+        status |= setIntegerParam(addr + 3, ADMaxSizeX, nx);
+        status |= setIntegerParam(addr + 3, ADMaxSizeY, ny * ndig);
         status |= setIntegerParam(addr + 3, ADBinX, binX);
         status |= setIntegerParam(addr + 3, ADBinY, binY);
         status |= setIntegerParam(addr + 3, ADMinX, minX);
         status |= setIntegerParam(addr + 3, ADMinY, minY);
-        status |= setIntegerParam(addr + 3, ADSizeX, sizeX);
-        status |= setIntegerParam(addr + 3, ADSizeY, sizeY * ndig);
+        status |= setIntegerParam(addr + 3, ADSizeX, nx);
+        status |= setIntegerParam(addr + 3, ADSizeY, ny * ndig);
         status |= setIntegerParam(addr + 3, NDDataType, dataTypeComb); 
     }
-    if (dataType == dataTypeComb) {
-        memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pImage->pData, arrayInfo.totalBytes);
-    } else {
-        NDArray* pTemp = NULL;
-        this->pNDArrayPool->convert(m_pRaw, &pTemp, dataTypeComb, dimsOut);
-        pTemp->getInfo(&arrayInfo);
-        memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pTemp->pData, arrayInfo.totalBytes);
-        pTemp->release();
+    memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pImage->pData, arrayInfo.totalBytes);
+    if (freepImage) {
+        pImage->release();
     }
     return(status);
+}
+
+int NucInstDig::callComputeArray(NDDataType_t dataType, int addr,
+      const std::vector<double>& data, int sizeX, int sizeY)
+{
+    int status = asynSuccess;
+    switch (dataType) {
+        case NDInt8:
+            status |= computeArray<epicsInt8>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt8:
+            status |= computeArray<epicsUInt8>(addr, data, sizeX, sizeY);
+            break;
+        case NDInt16:
+            status |= computeArray<epicsInt16>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt16:
+            status |= computeArray<epicsUInt16>(addr, data, sizeX, sizeY);
+            break;
+        case NDInt32:
+            status |= computeArray<epicsInt32>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt32:
+            status |= computeArray<epicsUInt32>(addr, data, sizeX, sizeY);
+            break;
+        case NDInt64:
+            status |= computeArray<epicsInt64>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt64:
+            status |= computeArray<epicsUInt64>(addr, data, sizeX, sizeY);
+            break;
+        case NDFloat32:
+            status |= computeArray<epicsFloat32>(addr, data, sizeX, sizeY);
+            break;
+        case NDFloat64:
+            status |= computeArray<epicsFloat64>(addr, data, sizeX, sizeY);
+            break;
+    }
+    return status;
 }
 
 // supplied array of x,y,t

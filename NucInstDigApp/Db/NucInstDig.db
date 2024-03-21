@@ -14,6 +14,7 @@ record(printf, "$(P)$(Q)_SYNCFILENAME")
     field(INP1, "$(P)DAE:RUNNUMBER")
     field(FMT, "%s%s")
 	field(SIZV, "100")
+	field(PINI, "YES")
 }
 
 record(bo, "$(P)$(Q)STOP:SP")
@@ -109,6 +110,7 @@ record(bo, "$(P)$(Q)READ_DC_SPECTRA:SP")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 	field(PINI, "YES")
+	field(VAL, "1")
     info(autosaveFields, "VAL")
 }
 
@@ -136,6 +138,7 @@ record(bo, "$(P)$(Q)READ_TOF_SPECTRA:SP")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 	field(PINI, "YES")
+	field(VAL, "1")
     info(autosaveFields, "VAL")
 }
 

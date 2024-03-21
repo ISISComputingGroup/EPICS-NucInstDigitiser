@@ -242,7 +242,8 @@ private:
     template <typename epicsType> 
          int computeArray(int addr, const std::vector<double>& data, int maxSizeX, int maxSizeY);
          
-         
+    int callComputeArray(NDDataType_t dataType, int addr,
+      const std::vector<double>& data, int sizeX, int sizeY);
     int rebin(const double* data_in, double xmin_in, double xmax_in, int nin,
                double* data_out, double xmin_out, double xmax_out, int nout);
 

@@ -1652,7 +1652,6 @@ void NucInstDig::pollerThread1()
     {
         try
         {
-            epicsGuard<NucInstDig> _lock(*this);
             for(const auto& kv : m_param_data)
             {
                 const ParamData* p = kv.second;
@@ -1661,6 +1660,7 @@ void NucInstDig::pollerThread1()
                     rapidjson::Document doc_recv;
                     getParameter(p->name, doc_recv, p->chan);
                     rapidjson::Value& value = doc_recv["value"];
+                    epicsGuard<NucInstDig> _lock(*this);
                     if (p->type == asynParamInt32)
                     {
                         setIntegerParam(kv.first, (value.IsInt() ? value.GetInt() : atoi(value.GetString())));

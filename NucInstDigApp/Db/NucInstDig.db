@@ -7,12 +7,22 @@ record(bo, "$(P)$(Q)START:SP")
 }
 alias("$(P)$(Q)START:SP", "$(P)$(Q)START")
 
+
+record(printf, "$(P)$(Q)_SYNCFILENAME")
+{
+    field(INP0, "$(P)DAE:INSTNAME")
+    field(INP1, "$(P)DAE:RUNNUMBER")
+    field(FMT, "%s%s")
+	field(SIZV, "100")
+	field(PINI, "YES")
+}
+
 record(bo, "$(P)$(Q)STOP:SP")
 {
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),0,0)STOP")
 	field(UDFS, "NO_ALARM")
-	field(FLNK, "$(P)$(Q)_STOP:SP.PROC")
+	field(FLNK, "$(P)$(Q)STOPAD:SP.PROC")
 }
 alias("$(P)$(Q)STOP:SP", "$(P)$(Q)STOP")
 
@@ -21,18 +31,31 @@ record(dfanout, "$(P)$(Q)_START:SP")
     field(VAL, "1")
     field(OUTA, "$(P)$(Q)RESET_DC_SPECTRA:SP PP")
     field(OUTB, "$(P)$(Q)RESET_TOF_SPECTRA:SP PP")
-    field(OUTC,  "$(P)$(Q)AD1:Acquire PP")
-    field(OUTD,  "$(P)$(Q)AD2:Acquire PP")
-    field(OUTE,  "$(P)$(Q)AD3:Acquire PP")
+    field(FLNK, "$(P)$(Q)STARTAD:SP.PROC")
 }
 
-record(dfanout, "$(P)$(Q)_STOP:SP")
+record(dfanout, "$(P)$(Q)STARTAD:SP")
+{
+    field(VAL, "1")
+    field(OUTA,  "$(P)$(Q)AD1:Acquire PP")
+    field(OUTB,  "$(P)$(Q)AD2:Acquire PP")
+    field(OUTC,  "$(P)$(Q)AD3:Acquire PP")
+$(IFDIG0=#)    field(OUTD,  "$(P)$(Q)AD4:Acquire PP")
+$(IFDIG0=#)    field(OUTE,  "$(P)$(Q)AD5:Acquire PP")
+$(IFDIG0=#)    field(OUTF,  "$(P)$(Q)AD6:Acquire PP")
+    field(FLNK, "$(P)$(Q)_SYNCFILENAME.PROC")
+}
+
+record(dfanout, "$(P)$(Q)STOPAD:SP")
 {
     field(VAL, "0")
     field(OUTA,  "$(P)$(Q)AD1:Acquire PP")
     field(OUTB,  "$(P)$(Q)AD2:Acquire PP")
     field(OUTC,  "$(P)$(Q)AD3:Acquire PP")
-	field(FLNK, "$(P)$(Q)_SAVEFILE:SP")
+$(IFDIG0=#)    field(OUTD,  "$(P)$(Q)AD4:Acquire PP")
+$(IFDIG0=#)    field(OUTE,  "$(P)$(Q)AD5:Acquire PP")
+$(IFDIG0=#)    field(OUTF,  "$(P)$(Q)AD6:Acquire PP")
+	field(FLNK, "$(P)$(Q)_SAVEFILE:SP.PROC")
 }
 
 record(dfanout, "$(P)$(Q)_SAVEFILE:SP")
@@ -41,6 +64,9 @@ record(dfanout, "$(P)$(Q)_SAVEFILE:SP")
     field(OUTA,  "$(P)$(Q)AD1:FILE:WriteFile PP")
     field(OUTB,  "$(P)$(Q)AD2:FILE:WriteFile PP")
     field(OUTC,  "$(P)$(Q)AD3:FILE:WriteFile PP")
+$(IFDIG0=#)    field(OUTD,  "$(P)$(Q)AD4:FILE:WriteFile PP")
+$(IFDIG0=#)    field(OUTE,  "$(P)$(Q)AD5:FILE:WriteFile PP")
+$(IFDIG0=#)    field(OUTF,  "$(P)$(Q)AD6:FILE:WriteFile PP")
 }
 
 record(bo, "$(P)$(Q)CONFIG:DGTZ:SP")
@@ -90,6 +116,7 @@ record(bo, "$(P)$(Q)READ_DC_SPECTRA:SP")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 	field(PINI, "YES")
+	field(VAL, "1")
     info(autosaveFields, "VAL")
 }
 
@@ -117,6 +144,7 @@ record(bo, "$(P)$(Q)READ_TOF_SPECTRA:SP")
 	field(ZNAM, "NO")
 	field(ONAM, "YES")
 	field(PINI, "YES")
+	field(VAL, "1")
     info(autosaveFields, "VAL")
 }
 

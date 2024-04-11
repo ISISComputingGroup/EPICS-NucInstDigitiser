@@ -206,7 +206,7 @@ asynStatus NucInstDig::writeInt32(asynUser *pasynUser, epicsInt32 value)
 	getParamName(function, &paramName);
     try {
         if (function == ADAcquire)
-        {            
+        {
             setADAcquire(addr, value);
             // fall through to next line to call base class
         }
@@ -530,6 +530,51 @@ void NucInstDig::updateTraces()
     }
 }
 
+// assumes data is a histogram with boundaries specified and equially spaces
+int NucInstDig::rebin(const double* data_in, double xmin_in, double xmax_in, int nin,
+                      double* data_out, double xmin_out, double xmax_out, int nout)
+{
+    std::fill(data_out, data_out + nout, 0.0);
+    int i = 0, j = 0;
+    double xstep_in = (xmax_in - xmin_in) / nin;
+    double xstep_out = (xmax_out - xmin_out) / nout;
+    while(i < nin && j < nout) {
+        double xin_low = i * xstep_in;
+        double xin_high = (i + 1) * xstep_in;
+        double xout_low = j * xstep_out;
+        double xout_high = (j + 1) * xstep_out;
+        if ( xout_high <= xin_low )
+        {
+            j++;		/* old and new bins do not overlap */
+        }
+        else if ( xin_high <= xout_low )
+        {
+            i++;		/* old and new bins do not overlap */
+        }
+        else
+        {
+            /*
+             *        delta is the overlap of the bins on axis
+             */
+            double delta = std::min(xin_high, xout_high) - std::max(xin_low, xout_low);
+            if ( delta <= 0.0 )
+            {
+                std::cerr << "REBIN: error - no bin overlap detected" << std::endl;
+                return -1;
+            }
+            data_out[j] += data_in[i] * delta;
+            if ( xout_high > xin_high )
+            {
+                i++;
+            }
+            else
+            {
+                j++;
+            }
+        }
+    }
+    return 0;
+}
 
 void NucInstDig::updateAD()
 {
@@ -552,7 +597,7 @@ void NucInstDig::updateAD()
 	while(true)
 	{
 		all_acquiring = all_enable = 0;
-		for(int i=0; i<maxAddr; ++i)
+		for(int i=0; i<maxAddr; ++i) // we use maxAddr but upper 3 just forward combined spectra NDarrays and are not enabled here
 		{
 		    epicsGuard<NucInstDig> _lock(*this);
 			try 
@@ -565,6 +610,7 @@ void NucInstDig::updateAD()
                 } else if (i == 2) {
                     getIntegerParam(P_readTOFSpectra, &enable);
                 }
+                // addr 3,4,5 should always be disabled 
 				getIntegerParam(i, ADAcquire, &acquiring);
 				getDoubleParam(i, ADAcquirePeriod, &acquirePeriod);
 				
@@ -582,6 +628,9 @@ void NucInstDig::updateAD()
 					old_acquiring[i] = acquiring;
 				}
 				setIntegerParam(i, ADStatus, ADStatusAcquire); 
+                if (m_dig_id == 0) {
+				    setIntegerParam(i + 3, ADStatus, ADStatusAcquire); 
+                }
 				epicsTimeGetCurrent(&startTime);
 				getIntegerParam(i, ADImageMode, &imageMode);
 
@@ -590,6 +639,10 @@ void NucInstDig::updateAD()
 
 				setShutter(i, ADShutterOpen);
 				callParamCallbacks(i, i);
+                if (m_dig_id == 0) {
+				    setShutter(i + 3, ADShutterOpen);
+				    callParamCallbacks(i + 3, i + 3);
+                }
 				
 				/* Update the image */
                 if (i == 0) {
@@ -615,6 +668,11 @@ void NucInstDig::updateAD()
 				setIntegerParam(i, ADStatus, ADStatusReadout);
 				/* Call the callbacks to update any changes */
 				callParamCallbacks(i, i);
+                if (m_dig_id == 0) {
+				    setShutter(i + 3, ADShutterClosed);
+				    setIntegerParam(i + 3, ADStatus, ADStatusReadout);
+				    callParamCallbacks(i + 3, i + 3);
+                }
 
 				pImage = this->pArrays[i];
 				if (pImage == NULL)
@@ -631,7 +689,10 @@ void NucInstDig::updateAD()
 				++numImagesCounter;
 				setIntegerParam(i, NDArrayCounter, imageCounter);
 				setIntegerParam(i, ADNumImagesCounter, numImagesCounter);
-
+                if (m_dig_id == 0) {
+				    setIntegerParam(i + 3, NDArrayCounter, imageCounter);
+				    setIntegerParam(i + 3, ADNumImagesCounter, numImagesCounter);
+                }
 				/* Put the frame number and time stamp into the buffer */
 				pImage->uniqueId = imageCounter;
 				pImage->timeStamp = startTime.secPastEpoch + startTime.nsec / 1.e9;
@@ -648,6 +709,16 @@ void NucInstDig::updateAD()
 				  asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
 						"%s:%s: calling imageData callback addr %d\n", driverName, functionName, i);
 				  doCallbacksGenericPointer(pImage, NDArrayData, i);
+                  NDArray* pRawComb = g_rawCombined[i];
+                  if (m_dig_id == 0 && pRawComb != NULL) {
+                      epicsGuard<epicsMutex> _lock(g_digCombinedLock);
+				      /* Put the frame number and time stamp into the buffer */
+				      pRawComb->uniqueId = imageCounter;
+				      pRawComb->timeStamp = startTime.secPastEpoch + startTime.nsec / 1.e9;
+				      updateTimeStamp(&pRawComb->epicsTS);
+                      this->getAttributes(pRawComb->pAttributeList);
+                      doCallbacksGenericPointer(pRawComb , NDArrayData, i + 3);
+                  }
 				}
 				epicsTimeGetCurrent(&endTime);
 				elapsedTime = epicsTimeDiffInSeconds(&endTime, &startTime);
@@ -655,6 +726,9 @@ void NucInstDig::updateAD()
 				last_update[i] = endTime;
 				/* Call the callbacks to update any changes */
 				callParamCallbacks(i, i);
+                if (m_dig_id == 0) {
+                    callParamCallbacks(i + 3, i + 3);
+                }
 				/* sleep for the acquire period minus elapsed time. */
 				delay = acquirePeriod - elapsedTime;
 				asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
@@ -689,10 +763,10 @@ void NucInstDig::updateAD()
 }
 
 /** Computes the new image data */
-int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, int ny)
+int NucInstDig::computeImage(int addr, const std::vector<double>& data_in, int nx, int ny)
 {
     int status = asynSuccess;
-    NDDataType_t dataType;
+    NDDataType_t dataType, dataTypeComb;
     int itemp;
     int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY;
     int xDim=0, yDim=1, colorDim=-1;
@@ -704,7 +778,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
     NDArrayInfo_t arrayInfo;
     NDArray *pImage;
     const char* functionName = "computeImage";
-
+    
     /* NOTE: The caller of this function must have taken the mutex */
 
     status |= getIntegerParam(addr, ADBinX,         &binX);
@@ -727,6 +801,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
 			driverName, functionName);
 		return (status);
 	}
+    
     if (maxSizeX != nx)
     {
         maxSizeX = nx;
@@ -839,38 +914,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
         }
 //    }
 
-    switch (dataType) {
-        case NDInt8:
-            status |= computeArray<epicsInt8>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt8:
-            status |= computeArray<epicsUInt8>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDInt16:
-            status |= computeArray<epicsInt16>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt16:
-            status |= computeArray<epicsUInt16>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDInt32:
-            status |= computeArray<epicsInt32>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt32:
-            status |= computeArray<epicsUInt32>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDInt64:
-            status |= computeArray<epicsInt64>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDUInt64:
-            status |= computeArray<epicsUInt64>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDFloat32:
-            status |= computeArray<epicsFloat32>(addr, data, maxSizeX, maxSizeY);
-            break;
-        case NDFloat64:
-            status |= computeArray<epicsFloat64>(addr, data, maxSizeX, maxSizeY);
-            break;
-    }
+    status |= callComputeArray(dataType, addr, data_in, maxSizeX, maxSizeY);
 
     /* Extract the region of interest with binning.
      * If the entire image is being used (no ROI or binning) that's OK because
@@ -898,6 +942,7 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
                     driverName, functionName);
         return(status);
     }
+    bool freepImage = false;
     pImage = this->pArrays[addr];
     pImage->getInfo(&arrayInfo);
     status = asynSuccess;
@@ -907,10 +952,137 @@ int NucInstDig::computeImage(int addr, const std::vector<double>& data, int nx, 
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                     "%s:%s: error setting parameters\n",
                     driverName, functionName);
+
+    // create combined accross digitisers array
+    dataTypeComb = dataType;
+    if (addr == 2) { // TOF spectra 
+        std::vector<double> data;
+        int nrebin = 2048;
+        data.resize(nrebin * ny);
+        for(int i=0; i<ny; ++i) {
+            if (rebin(&(data_in[i * nx]), 0.0, nx, nx, &(data[i * nrebin]), 0.0, 32768, nrebin) != 0) {
+                std::cerr << "rebin error" << std::endl;
+                return asynError;
+            }
+        }
+        nx = nrebin; // continue with new size
+        dataTypeComb = NDInt32;
+        if (m_pRaw) m_pRaw->release();
+        /* Allocate the raw buffer we use to compute images. */
+        dims[xDim] = nx;
+        dims[yDim] = ny;
+        if (ndims > 2) dims[colorDim] = 3;
+        m_pRaw = this->pNDArrayPool->alloc(ndims, dims, dataTypeComb, 0, NULL);
+        if (!m_pRaw) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                      "%s:%s: error allocating raw buffer\n",
+                      driverName, functionName);
+            return(status);
+        }
+        status |= callComputeArray(dataTypeComb, addr, data, nx, ny);
+
+        /* Extract the region of interest with binning.
+         * If the entire image is being used (no ROI or binning) that's OK because
+         * convertImage detects that case and is very efficient */
+        m_pRaw->initDimension(&dimsOut[xDim], nx);
+        m_pRaw->initDimension(&dimsOut[yDim], ny);
+        if (ndims > 2) m_pRaw->initDimension(&dimsOut[colorDim], 3);
+        pImage = NULL;
+        status |= this->pNDArrayPool->convert(m_pRaw,
+                                         &pImage,
+                                         dataTypeComb,
+                                         dimsOut);
+        if (status) {
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                    "%s:%s: error allocating buffer in convert()\n",
+                    driverName, functionName);
+            return(status);
+        }
+        pImage->getInfo(&arrayInfo);
+        freepImage = true;
+    }
+    epicsGuard<epicsMutex> _lock(g_digCombinedLock);
+    size_t ndig = g_dig_list.size();
+    NDArray*& pRawComb = g_rawCombined[addr];
+    NDArrayInfo arrayInfoComb;
+    if (pRawComb){
+        pRawComb->getInfo(&arrayInfoComb);
+        if (arrayInfoComb.xSize != arrayInfo.xSize || arrayInfoComb.ySize != arrayInfo.ySize * ndig) {
+            pRawComb->release();
+            pRawComb = NULL;
+        }
+    }
+    if (pRawComb == NULL && m_dig_id != 0) {
+        return status;
+    }
+    if (pRawComb == NULL) {
+        dims[arrayInfo.xDim] = arrayInfo.xSize;
+        dims[arrayInfo.yDim] = arrayInfo.ySize * ndig;
+        dims[2] = 1;
+        pRawComb = g_dig_list[0]->pNDArrayPool->alloc(3, dims, dataTypeComb, 0, NULL);
+        pRawComb->getInfo(&arrayInfoComb);
+        memset(pRawComb->pData, 0, arrayInfoComb.totalBytes);
+    }
+    if (m_dig_id == 0) {
+        pRawComb->getInfo(&arrayInfoComb);
+        status |= setIntegerParam(addr + 3, NDArraySize,  (int)arrayInfoComb.totalBytes);
+        status |= setIntegerParam(addr + 3, NDArraySizeX, (int)pRawComb->dims[xDim].size);
+        status |= setIntegerParam(addr + 3, NDArraySizeY, (int)pRawComb->dims[yDim].size);
+        status |= setIntegerParam(addr + 3, ADMaxSizeX, nx);
+        status |= setIntegerParam(addr + 3, ADMaxSizeY, ny * ndig);
+        status |= setIntegerParam(addr + 3, ADBinX, binX);
+        status |= setIntegerParam(addr + 3, ADBinY, binY);
+        status |= setIntegerParam(addr + 3, ADMinX, minX);
+        status |= setIntegerParam(addr + 3, ADMinY, minY);
+        status |= setIntegerParam(addr + 3, ADSizeX, nx);
+        status |= setIntegerParam(addr + 3, ADSizeY, ny * ndig);
+        status |= setIntegerParam(addr + 3, NDDataType, dataTypeComb); 
+    }
+    memcpy((char*)pRawComb->pData + m_dig_id * arrayInfo.totalBytes, pImage->pData, arrayInfo.totalBytes);
+    if (freepImage) {
+        pImage->release();
+    }
     return(status);
 }
 
-
+int NucInstDig::callComputeArray(NDDataType_t dataType, int addr,
+      const std::vector<double>& data, int sizeX, int sizeY)
+{
+    int status = asynSuccess;
+    switch (dataType) {
+        case NDInt8:
+            status |= computeArray<epicsInt8>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt8:
+            status |= computeArray<epicsUInt8>(addr, data, sizeX, sizeY);
+            break;
+        case NDInt16:
+            status |= computeArray<epicsInt16>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt16:
+            status |= computeArray<epicsUInt16>(addr, data, sizeX, sizeY);
+            break;
+        case NDInt32:
+            status |= computeArray<epicsInt32>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt32:
+            status |= computeArray<epicsUInt32>(addr, data, sizeX, sizeY);
+            break;
+        case NDInt64:
+            status |= computeArray<epicsInt64>(addr, data, sizeX, sizeY);
+            break;
+        case NDUInt64:
+            status |= computeArray<epicsUInt64>(addr, data, sizeX, sizeY);
+            break;
+        case NDFloat32:
+            status |= computeArray<epicsFloat32>(addr, data, sizeX, sizeY);
+            break;
+        case NDFloat64:
+            status |= computeArray<epicsFloat64>(addr, data, sizeX, sizeY);
+            break;
+    }
+    return status;
+}
 
 // supplied array of x,y,t
 template <typename epicsType> 
@@ -1151,13 +1323,11 @@ void NucInstDig::readData2d(const std::string& name, const std::string& args, st
     }
 }
 
-void NucInstDig::getParameter(const std::string& name, rapidjson::Value& value, int idx)
+void NucInstDig::getParameter(const std::string& name, rapidjson::Document& doc_recv, int idx)
 {
     char idxStr[16];
-    rapidjson::Document doc_recv;
     sprintf(idxStr, "%d", idx);
     execute("get_parameter", name, idxStr, "", doc_recv);
-    value = doc_recv["value"];
 }
 
 void NucInstDig::setParameter(const std::string& name, const std::string& value, int idx)
@@ -1267,7 +1437,7 @@ void NucInstDig::createNParams(const char* name, asynParamType type, int* param,
 /// \param[in] dcomint DCOM interface pointer created by lvDCOMConfigure()
 /// \param[in] portName @copydoc initArg0
 NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_idx)
-   : ADDriver(portName, 3, 100,
+   : ADDriver(portName, 6, 100,
 					0, // maxBuffers
 					0, // maxMemory
                     asynInt32Mask | asynInt32ArrayMask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
@@ -1279,8 +1449,8 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_zmq_events(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5555"),
                      m_zmq_cmd(zmq::socket_type::req, std::string("tcp://") + targetAddress + ":5557"),
                      m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556"),
-                     m_dig_idx(dig_idx), m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL), m_pRaw(NULL),
-                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false)
+                     m_dig_idx(dig_idx), /*m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL),*/ m_pRaw(NULL),
+                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false), m_dig_id(-1)
 {					
     const char *functionName = "NucInstDig";
 
@@ -1482,14 +1652,15 @@ void NucInstDig::pollerThread1()
     {
         try
         {
-            epicsGuard<NucInstDig> _lock(*this);
             for(const auto& kv : m_param_data)
             {
                 const ParamData* p = kv.second;
                 try
                 {
-                    rapidjson::Value value;
-                    getParameter(p->name, value, p->chan);
+                    rapidjson::Document doc_recv;
+                    getParameter(p->name, doc_recv, p->chan);
+                    rapidjson::Value& value = doc_recv["value"];
+                    epicsGuard<NucInstDig> _lock(*this);
                     if (p->type == asynParamInt32)
                     {
                         setIntegerParam(kv.first, (value.IsInt() ? value.GetInt() : atoi(value.GetString())));
@@ -1640,6 +1811,7 @@ asynStatus NucInstDig::drvUserCreate(asynUser *pasynUser, const char* drvInfo, c
              if (findParam(param_name.c_str(), &param_index) == asynSuccess)
              {
                  pasynUser->reason = param_index;
+                 pasynUser->reason = param_index;
                  return asynSuccess;
              }
              if (split_vec[2] == "I")
@@ -1681,11 +1853,16 @@ asynStatus NucInstDig::drvUserDestroy(asynUser *pasynUser)
    return ADDriver::drvUserDestroy(pasynUser);
 }
 
+NDArray* NucInstDig::g_rawCombined[3]; 
+std::vector<NucInstDig*> NucInstDig::g_dig_list;
+epicsMutex NucInstDig::g_digCombinedLock;
+
 int nucInstDigConfigure(const char *portName, const char *targetAddress, int dig_idx)
 {
 	try
 	{
 		NucInstDig* iface = new NucInstDig(portName, targetAddress, dig_idx);
+        NucInstDig::addDigitiser(iface, dig_idx);
 		return(asynSuccess);
 	}
 	catch(const std::exception& ex)

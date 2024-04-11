@@ -189,10 +189,10 @@ private:
 	#define FIRST_NUCINSTDIG_PARAM P_setup
 	#define LAST_NUCINSTDIG_PARAM P_resetDCSpectra
 
-    NDArray* m_pTraces;
-    NDArray* m_pDCSpectra;
-    NDArray* m_pTOFSpectra;
-    NDArray* m_pRaw;
+    //NDArray* m_pTraces;
+    //NDArray* m_pDCSpectra;
+    //NDArray* m_pTOFSpectra;
+    NDArray* m_pRaw; // temporary for traces, tof etc. real info in this->pArrays[addr]
     
     epicsMutex m_dcLock;
     epicsMutex m_tracesLock;
@@ -217,7 +217,7 @@ private:
     void zmqMonitorPoller();
     void execute(const std::string& type, const std::string& name, const std::string& arg1, const std::string& arg2, rapidjson::Document& doc_recv);
 	void executeCmd(const std::string& name, const std::string& args = "");
-    void getParameter(const std::string& name, rapidjson::Value& value, int idx = 0);
+    void getParameter(const std::string& name, rapidjson::Document& doc_recv, int idx = 0);
     void setParameter(const std::string& name, const std::string& value, int idx = 0);
     void setParameter(const std::string& name, double value, int idx = 0);
     void setParameter(const std::string& name, int value, int idx = 0);
@@ -238,9 +238,14 @@ private:
 	void pollerThread6();
     void readData2d(const std::string& name, const std::string& args, std::vector<double>& dataOut, size_t& nspec, size_t& npts);
     void setADAcquire(int addr, int acquire);
-    int computeImage(int addr, const std::vector<double>& data, int nx, int ny);
+    int computeImage(int addr, const std::vector<double>& data_in, int nx, int ny);
     template <typename epicsType> 
          int computeArray(int addr, const std::vector<double>& data, int maxSizeX, int maxSizeY);
+         
+    int callComputeArray(NDDataType_t dataType, int addr,
+      const std::vector<double>& data, int sizeX, int sizeY);
+    int rebin(const double* data_in, double xmin_in, double xmax_in, int nin,
+               double* data_out, double xmin_out, double xmax_out, int nout);
 
     std::vector<double> m_traceX[4];
     std::vector<double> m_traceY[4];
@@ -253,6 +258,18 @@ private:
     int m_TOFSpecIdx[4];
     
     int m_dig_idx;
+    int m_dig_id; // this is our position in g_dig_list
+    
+    static NDArray* g_rawCombined[3]; // across all digitisers
+    static std::vector<NucInstDig*> g_dig_list;
+    static epicsMutex g_digCombinedLock;
+    public:
+    void setDigId(int id) { m_dig_id = id; }
+    static void addDigitiser(NucInstDig* dig, int dig_idx) {
+        epicsGuard<epicsMutex> _lock(g_digCombinedLock);
+        g_dig_list.push_back(dig);
+        dig->setDigId(g_dig_list.size() - 1);
+    }
 };
 
 #define P_setupString	            "SETUP"

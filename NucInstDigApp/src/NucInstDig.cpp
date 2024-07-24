@@ -22,8 +22,8 @@
 
 #include <zmq.hpp>
 #include <flatbuffers/flatbuffers.h>
-#include "dat1_digitizer_analog_trace_v1_generated.h"
-#include "dev1_digitizer_event_v1_generated.h"
+#include "dat2_digitizer_analog_trace_v2_generated.h"
+#include "dev2_digitizer_event_v2_generated.h"
 
 #include <epicsTypes.h>
 #include <epicsTime.h>

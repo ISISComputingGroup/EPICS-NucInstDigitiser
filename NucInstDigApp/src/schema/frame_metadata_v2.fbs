@@ -1,0 +1,23 @@
+// Frame metadata/frame spacific information.
+// Essentially an amalgamation of the DAE status packet and veto packet.
+table FrameMetadataV2 {
+    timestamp: GpsTime;  // GPS timestamp in UTC
+    period_number: uint64;
+    protons_per_pulse: uint8;
+    running: bool;
+    frame_number: uint32;
+    veto_flags: uint16;  // Flags indicating frame veto for different reasons
+}
+
+struct GpsTime {
+    year: uint8;  // Years since 2000 (i.e. 22 = 2022)
+    day: uint16;  // Day of year (1-366)
+
+    hour: uint8;
+    minute: uint8;
+    second: uint8;
+
+    millisecond: uint16;
+    microsecond: uint16;
+    nanosecond: uint16;
+}

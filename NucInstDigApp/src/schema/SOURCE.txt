@@ -1,0 +1,1 @@
+https://github.com/STFC-ICD-Research-and-Design/supermusr-data-pipeline/tree/main/schemas

@@ -4,8 +4,8 @@
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 #include <flatbuffers/flatbuffers.h>
-#include "dat1_digitizer_analog_trace_v1_generated.h"
-#include "dev1_digitizer_event_v1_generated.h"
+#include "dat2_digitizer_analog_trace_v2_generated.h"
+#include "dev2_digitizer_event_v2_generated.h"
 
 #include <zmq.hpp>
 
@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
         }
         std::cerr << std::endl;
     }
-    std::cerr << "timestamp " << msg->status()->timestamp() << std::endl;
+    std::cerr << "timestamp " << msg->metadata()->timestamp() << std::endl;
     }
     return 0;
 }

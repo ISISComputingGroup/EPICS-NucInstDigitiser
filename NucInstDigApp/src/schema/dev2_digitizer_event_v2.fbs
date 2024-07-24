@@ -1,0 +1,15 @@
+include "frame_metadata_v2.fbs";
+
+file_identifier "dev2";
+
+table DigitizerEventListMessage {
+    digitizer_id: uint8;
+
+    metadata: FrameMetadataV2 (required);
+
+    time: [uint32];  // Time since start of frame in nanoseconds
+    voltage: [uint16];
+    channel: [uint32];  // Channel number (note: not index)
+}
+
+root_type DigitizerEventListMessage;

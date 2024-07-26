@@ -468,6 +468,8 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
 
 void NucInstDig::updateTraces()
 {
+    static const double TRACE_UPDATE_TIME = atof(getenv("TRACE_UPDATE_TIME") != NULL ? getenv("TRACE_UPDATE_TIME") : "1.0");
+    static const double TRACE_DELAY_TIME = atof(getenv("TRACE_DELAY_TIME") != NULL ? getenv("TRACE_DELAY_TIME") : "0.0");
     epicsTimeStamp last_update, now;
     epicsTimeGetCurrent(&last_update);
     while(true)
@@ -481,8 +483,11 @@ void NucInstDig::updateTraces()
                 continue;
             }
             epicsTimeGetCurrent(&now);
-            if (epicsTimeDiffInSeconds(&now, &last_update) < 1.0)
+            if (epicsTimeDiffInSeconds(&now, &last_update) < TRACE_UPDATE_TIME)
             {
+                if (TRACE_DELAY_TIME != 0.0) {
+                    epicsThreadSleep(TRACE_DELAY_TIME);
+                }
                 continue;
             }
             auto msg = GetDigitizerAnalogTraceMessage(reply.data());
@@ -518,7 +523,7 @@ void NucInstDig::updateTraces()
                     doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceY[j].data()), m_traceY[j].size(), P_traceY[j], 0);
                 }
             }
-            last_update = now;
+            epicsTimeGetCurrent(&last_update);
         }
         catch(const std::exception& ex)
         {

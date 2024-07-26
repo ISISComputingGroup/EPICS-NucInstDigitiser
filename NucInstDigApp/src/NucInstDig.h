@@ -59,8 +59,9 @@ class ZMQConnectionHandler
     zmq::socket_type m_sock_type;
     std::string m_address;
     epicsMutex m_lock;
+    bool m_conflate;
     public:
-    ZMQConnectionHandler(zmq::socket_type sock_type, const std::string& address) : m_sock_type(sock_type), m_address(address), m_zmq_ctx{1}, m_zmq_socket(nullptr), m_zmq_mon(nullptr)
+    ZMQConnectionHandler(zmq::socket_type sock_type, const std::string& address, bool conflate = false) : m_sock_type(sock_type), m_address(address), m_zmq_ctx{1}, m_zmq_socket(nullptr), m_zmq_mon(nullptr), m_conflate(conflate)
     {
         init();
     }
@@ -80,6 +81,9 @@ class ZMQConnectionHandler
         m_zmq_socket->set(zmq::sockopt::linger, 5000);
         m_zmq_socket->set(zmq::sockopt::rcvtimeo, 5000);
         m_zmq_socket->set(zmq::sockopt::sndtimeo, 5000);
+        if (m_conflate) {
+            m_zmq_socket->set(zmq::sockopt::conflate, 1);
+        }
         m_zmq_mon = new zmq_monitor_t();
         m_zmq_mon->init(*m_zmq_socket, "inproc://NucInstDigConMon", events_to_monitor);
         m_zmq_socket->connect(m_address);

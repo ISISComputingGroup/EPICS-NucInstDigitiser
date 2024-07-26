@@ -1454,9 +1454,9 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                     1, /* Autoconnect */
                     0, /* Default priority */
                     0),	/* Default stack size*/
-                     m_zmq_events(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5555"),
+                     m_zmq_events(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5555", true),
                      m_zmq_cmd(zmq::socket_type::req, std::string("tcp://") + targetAddress + ":5557"),
-                     m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556"),
+                     m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556", true),
                      m_dig_idx(dig_idx), /*m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL),*/ m_pRaw(NULL),
                      m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false), m_dig_id(-1)
 {					

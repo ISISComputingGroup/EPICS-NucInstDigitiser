@@ -473,49 +473,52 @@ void NucInstDig::updateTraces()
     while(true)
     {
         try {
-        zmq::message_t reply{};
-        zmq::recv_result_t nbytes = m_zmq_stream.recv(reply, zmq::recv_flags::none);
-        if (!nbytes || *nbytes == 0)
-        {
-            epicsThreadSleep(1.0);
-            continue;
-        }
-        auto msg = GetDigitizerAnalogTraceMessage(reply.data());
-        auto channels = msg->channels();
-        for(int i=0; i<channels->size(); ++i) {
-            int chan = channels->Get(i)->channel();
-            auto voltages = channels->Get(i)->voltage();
+            zmq::message_t reply{};
+            zmq::recv_result_t nbytes = m_zmq_stream.recv(reply, zmq::recv_flags::none);
+            if (!nbytes || *nbytes == 0)
             {
-                epicsGuard<epicsMutex> _lock(m_tracesLock);
-                m_nVoltage = voltages->size();
-                m_traces.resize(m_NTRACE * m_nVoltage);
-                if (chan < m_NTRACE) {
-                    for(int k=0; k<m_nVoltage; ++k) {
-                        m_traces[chan * m_nVoltage + k] = voltages->Get(k);
+                epicsThreadSleep(0.5);
+                continue;
+            }
+            epicsTimeGetCurrent(&now);
+            if (epicsTimeDiffInSeconds(&now, &last_update) < 1.0)
+            {
+                continue;
+            }
+            auto msg = GetDigitizerAnalogTraceMessage(reply.data());
+            auto channels = msg->channels();
+            for(int i=0; i<channels->size(); ++i) {
+                int chan = channels->Get(i)->channel();
+                auto voltages = channels->Get(i)->voltage();
+                {
+                    epicsGuard<epicsMutex> _lock(m_tracesLock);
+                    m_nVoltage = voltages->size();
+                    m_traces.resize(m_NTRACE * m_nVoltage);
+                    if (chan < m_NTRACE) {
+                        for(int k=0; k<m_nVoltage; ++k) {
+                            m_traces[chan * m_nVoltage + k] = voltages->Get(k);
+                        }
+                    }
+                }
+                for(size_t j=0; j<4; ++j) {
+                    if (chan == m_traceIdx[j]) {
+                        m_traceX[j].resize(m_nVoltage);
+                        m_traceY[j].resize(m_nVoltage);
+                        for(int k=0; k<m_nVoltage; ++k) {
+                           m_traceX[j][k] = k;
+                           m_traceY[j][k] = m_traces[chan * m_nVoltage + k];
+                        }
                     }
                 }
             }
-            for(size_t j=0; j<4; ++j) {
-                if (chan == m_traceIdx[j]) {
-                    m_traceX[j].resize(m_nVoltage);
-                    m_traceY[j].resize(m_nVoltage);
-                    for(int k=0; k<m_nVoltage; ++k) {
-                       m_traceX[j][k] = k;
-                       m_traceY[j][k] = m_traces[chan * m_nVoltage + k];
-                    }
+            {
+                epicsGuard<NucInstDig> _lock(*this);
+                for(size_t j=0; j<4; ++j) {
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceX[j].data()), m_traceX[j].size(), P_traceX[j], 0);
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceY[j].data()), m_traceY[j].size(), P_traceY[j], 0);
                 }
-            }
-        }
-        epicsTimeGetCurrent(&now);
-        if (epicsTimeDiffInSeconds(&now, &last_update) > 0.5)
-        {
-            epicsGuard<NucInstDig> _lock(*this);
-            for(size_t j=0; j<4; ++j) {
-                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceX[j].data()), m_traceX[j].size(), P_traceX[j], 0);
-                doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceY[j].data()), m_traceY[j].size(), P_traceY[j], 0);
             }
             last_update = now;
-        }
         }
         catch(const std::exception& ex)
         {

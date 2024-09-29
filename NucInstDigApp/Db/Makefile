@@ -11,7 +11,7 @@ DB += NucInstDigDCSpec.db NucInstDigTrace.db NucInstDigTOFSpec.db
 DB += NucInstDigIntegerParam.db NucInstDigIntegerParamChan.db
 DB += NucInstDigRealParam.db NucInstDigRealParamChan.db
 DB += NucInstDigStringParam.db NucInstDigStringParamChan.db
-DB += ADNucInstDig.template sync_hifi.db
+DB += ADNucInstDig.template sync_inst.db
 
 #----------------------------------------------------
 # If <anyname>.db template is not named <anyname>*.template add

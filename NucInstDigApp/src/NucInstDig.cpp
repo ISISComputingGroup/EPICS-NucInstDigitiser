@@ -469,6 +469,7 @@ asynStatus NucInstDig::writeOctet(asynUser *pasynUser, const char *value, size_t
 void NucInstDig::updateTraces()
 {
     static const double TRACE_UPDATE_TIME = atof(getenv("TRACE_UPDATE_TIME") != NULL ? getenv("TRACE_UPDATE_TIME") : "1.0");
+#ifdef PULL_TRACES
     while(true)
     {
         epicsThreadSleep(TRACE_UPDATE_TIME);
@@ -525,6 +526,7 @@ void NucInstDig::updateTraces()
             epicsThreadSleep(3.0);
         }
     }
+#endif
 }
 
 // assumes data is a histogram with boundaries specified and equially spaces
@@ -1445,7 +1447,9 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                     0),	/* Default stack size*/
                      m_zmq_events(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5555", true),
                      m_zmq_cmd(zmq::socket_type::req, std::string("tcp://") + targetAddress + ":5557"),
+#ifdef PULL_TRACES
                      m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556", true),
+#endif
                      m_dig_idx(dig_idx), /*m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL),*/ m_pRaw(NULL),
                      m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false), m_dig_id(-1)
 {					
@@ -1741,7 +1745,9 @@ void NucInstDig::zmqMonitorPoller()
         try
         {
             m_zmq_cmd.pollMonitor();
+#ifdef PULL_TRACES
             m_zmq_stream.pollMonitor();
+#endif
             m_zmq_events.pollMonitor();
         }
         catch(const std::exception& ex)
@@ -1756,7 +1762,11 @@ void NucInstDig::zmqMonitorPoller()
         }
         {
             epicsGuard<NucInstDig> _lock(*this);
-            if (m_zmq_cmd.connected() && m_zmq_stream.connected() && m_zmq_events.connected()) {
+            if (m_zmq_cmd.connected() && m_zmq_events.connected()
+#ifdef PULL_TRACES
+                                      && m_zmq_stream.connected()
+#endif
+            ) {
                 setIntegerParam(P_ZMQConnected, 1);
                 m_connected = true;
             } else {

@@ -157,7 +157,9 @@ private:
     std::atomic<bool> m_connected;
 
     ZMQConnectionHandler m_zmq_cmd;
+#ifdef PULL_TRACES
     ZMQConnectionHandler m_zmq_stream;
+#endif
     ZMQConnectionHandler m_zmq_events;
     
     std::string m_targetAddress;

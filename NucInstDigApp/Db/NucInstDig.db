@@ -168,6 +168,18 @@ record(bo, "$(P)$(Q)READ_EVENTS:SP")
     info(autosaveFields, "VAL")
 }
 
+# we do not PINI or autosave as this is used to trigger a read 
+record(bo, "$(P)$(Q)READ_TRACES:SP")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0,0)READ_TRACES")
+	field(ZNAM, "NO")
+	field(ONAM, "YES")
+	field(UDFS, "NO_ALARM")
+    info(asyn:READBACK, "1")
+}
+alias("$(P)$(Q)READ_TRACES:SP", "$(P)$(Q)READ_TRACES")
+
 record(bi, "$(P)$(Q)READ_EVENTS")
 {
     field(DTYP, "asynInt32")

@@ -529,6 +529,52 @@ void NucInstDig::updateTraces()
 #endif
 }
 
+void NucInstDig::updateTracesOnRequest()
+{
+    while(true)
+    {
+        int read_traces = 0;
+        epicsThreadSleep(1.0);
+        lock();
+        getIntegerParam(P_readTraces, &read_traces);
+        setIntegerParam(P_readTraces, 0);
+        unlock();
+        if (read_traces == 0) {
+            continue;
+        }
+        try {
+            {
+                epicsGuard<epicsMutex> _lock(m_tracesLock);
+                readData2d("get_waveforms", "", m_traces, m_NTRACE, m_nVoltage);
+            }
+            for(size_t j=0; j<4; ++j) {
+                int idx = m_traceIdx[j];
+                if (idx >= 0 && idx < m_NTRACE) {
+                    m_traceX[j].resize(m_nVoltage);
+                    m_traceY[j].resize(m_nVoltage);
+                    for(int k=0; k<m_nVoltage; ++k) {
+                       m_traceX[j][k] = k;
+                       m_traceY[j][k] = m_traces[idx * m_nVoltage + k];
+                    }
+                    epicsGuard<NucInstDig> _lock2(*this);
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceX[j].data()), m_traceX[j].size(), P_traceX[j], 0);
+                    doCallbacksFloat64Array(reinterpret_cast<epicsFloat64*>(m_traceY[j].data()), m_traceY[j].size(), P_traceY[j], 0);
+                }
+            }
+        }
+        catch(const std::exception& ex)
+        {
+            std::cerr << "updaetTraces " << ex.what() << std::endl;
+            epicsThreadSleep(3.0);
+        }
+        catch(...)
+        {
+            std::cerr << "update traces exception"  << std::endl;
+            epicsThreadSleep(3.0);
+        }
+    }
+}
+
 // assumes data is a histogram with boundaries specified and equially spaces
 int NucInstDig::rebin(const double* data_in, double xmin_in, double xmax_in, int nin,
                       double* data_out, double xmin_out, double xmax_out, int nout)
@@ -1152,7 +1198,6 @@ int NucInstDig::computeArray(int addr, const std::vector<double>& data, int size
 	}
     return(status);
 }
-
     
 void NucInstDig::updateDCSpectra()
 {
@@ -1477,6 +1522,7 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
     createNParams(P_TOFSpecIdxString, asynParamInt32, P_TOFSpecIdx, 4);
     createParam(P_readDCSpectraString, asynParamInt32, &P_readDCSpectra);
     createParam(P_readEventsString, asynParamInt32, &P_readEvents);
+    createParam(P_readTracesString, asynParamInt32, &P_readTraces);
     createParam(P_readTOFSpectraString, asynParamInt32, &P_readTOFSpectra);
     createParam(P_resetTOFSpectraString, asynParamInt32, &P_resetTOFSpectra);
     createParam(P_resetDCSpectraString, asynParamInt32, &P_resetDCSpectra);
@@ -1709,7 +1755,8 @@ void NucInstDig::pollerThread1()
 void NucInstDig::pollerThread2()
 {
     static const char* functionName = "NucInstDigPoller2";
-    updateTraces();
+    //updateTraces();
+    updateTracesOnRequest();
 }
 
 void NucInstDig::pollerThread3()

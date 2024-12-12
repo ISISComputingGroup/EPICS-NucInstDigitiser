@@ -183,6 +183,7 @@ private:
     int P_readDCSpectra; // int
     int P_readEvents; // int
     int P_readTOFSpectra; // int
+    int P_readTraces; // int
     int P_configDGTZ; // int
     int P_configBASE; // int
     int P_configHV; // int
@@ -216,6 +217,7 @@ private:
     size_t m_nTOFSpec;
     
     void updateTraces();
+    void updateTracesOnRequest();
     void updateEvents();
     void updateDCSpectra();
     void updateTOFSpectra();
@@ -303,5 +305,6 @@ private:
 #define P_TOFSpecXString            "TOFSPEC%dX"
 #define P_TOFSpecYString            "TOFSPEC%dY"
 #define P_TOFSpecIdxString          "TOFSPEC%dIDX"
+#define P_readTracesString          "READ_TRACES"
 
 #endif /* NUCINSTDIG_H */

@@ -163,6 +163,7 @@ private:
     ZMQConnectionHandler m_zmq_events;
     
     std::string m_targetAddress;
+    std::string m_portName;
 
     int P_setup; // int, must be first createParam and in FIRST_NUCINSTDIG_PARAM
     int P_setupFile; // string

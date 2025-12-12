@@ -517,7 +517,7 @@ void NucInstDig::updateTraces()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << "updaetTraces " << ex.what() << std::endl;
+            std::cerr << "updateTraces " << ex.what() << std::endl;
             epicsThreadSleep(3.0);
         }
         catch(...)
@@ -531,6 +531,7 @@ void NucInstDig::updateTraces()
 
 void NucInstDig::updateTracesOnRequest()
 {
+    std::string message_prefix = "(" + m_portName + "," + m_targetAddress + ") updateTracesOnRequest: ";
     while(true)
     {
         int read_traces = 0;
@@ -564,12 +565,12 @@ void NucInstDig::updateTracesOnRequest()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << "updaetTraces " << ex.what() << std::endl;
+            std::cerr << message_prefix << ex.what() << std::endl;
             epicsThreadSleep(3.0);
         }
         catch(...)
         {
-            std::cerr << "update traces exception"  << std::endl;
+            std::cerr << message_prefix << "exception"  << std::endl;
             epicsThreadSleep(3.0);
         }
     }
@@ -1199,8 +1200,12 @@ int NucInstDig::computeArray(int addr, const std::vector<double>& data, int size
     return(status);
 }
     
+  //  spectra = sdk.read_data("get_A_spectra")
+    //readData2d("get_A_spectra", "", m_dcSpectra, m_nDCSpec, m_nDCPts)
+    
 void NucInstDig::updateDCSpectra()
 {
+    std::string message_prefix = "(" + m_portName + "," + m_targetAddress + ") updateDCSpectra: ";
     while(true)
     {
         int read_spectra = 0;
@@ -1233,12 +1238,12 @@ void NucInstDig::updateDCSpectra()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << "update dc spectra " << ex.what() << std::endl;
+            std::cerr << message_prefix << ex.what() << std::endl;
             epicsThreadSleep(3.0);            
         }
         catch(...)
         {
-            std::cerr << "update dc spectra exception"  << std::endl;
+            std::cerr << message_prefix << "exception"  << std::endl;
             epicsThreadSleep(3.0);            
         }
     }
@@ -1246,6 +1251,7 @@ void NucInstDig::updateDCSpectra()
     
 void NucInstDig::updateTOFSpectra()
 {
+    std::string message_prefix = "(" + m_portName + "," + m_targetAddress + ") updateTOFSpectra: ";
     while(true)
     {
         int read_spectra = 0;
@@ -1278,12 +1284,12 @@ void NucInstDig::updateTOFSpectra()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << "update TOF spectra " << ex.what() << std::endl;
+            std::cerr << message_prefix << ex.what() << std::endl;
             epicsThreadSleep(3.0);            
         }
         catch(...)
         {
-            std::cerr << "update TOF spectra exception"  << std::endl;
+            std::cerr << message_prefix << "exception"  << std::endl;
             epicsThreadSleep(3.0);            
         }
     }
@@ -1293,6 +1299,7 @@ void NucInstDig::updateTOFSpectra()
 
 void NucInstDig::updateEvents()
 {
+    std::string message_prefix = "(" + m_portName + "," + m_targetAddress + ") updateEvents: ";
     while(true)
     {
         int read_events = 0;
@@ -1326,12 +1333,12 @@ void NucInstDig::updateEvents()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << "update events " << ex.what() << std::endl;
+            std::cerr << message_prefix << ex.what() << std::endl;
             epicsThreadSleep(3.0);            
         }
         catch(...)
         {
-            std::cerr << "update events exception"  << std::endl;
+            std::cerr << message_prefix << "exception"  << std::endl;
             epicsThreadSleep(3.0);            
         }
     }
@@ -1496,7 +1503,8 @@ NucInstDig::NucInstDig(const char *portName, const char *targetAddress, int dig_
                      m_zmq_stream(zmq::socket_type::pull, std::string("tcp://") + targetAddress + ":5556", true),
 #endif
                      m_dig_idx(dig_idx), /*m_pTraces(NULL), m_pDCSpectra(NULL), m_pTOFSpectra(NULL),*/ m_pRaw(NULL),
-                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false), m_dig_id(-1)
+                     m_nDCSpec(0), m_nDCPts(0), m_nVoltage(0), m_NTRACE(8), m_nTOFSpec(0), m_nTOFPts(0), m_connected(false),
+                     m_dig_id(-1), m_portName(portName), m_targetAddress(targetAddress)
 {					
     const char *functionName = "NucInstDig";
 
@@ -1695,6 +1703,7 @@ void NucInstDig::pollerThread1()
 {
     static const char* functionName = "NucInstDigPoller1";
     unsigned long counter = 0;
+    std::string message_prefix = "(" + m_portName + "," + m_targetAddress + ") pollerThread1: ";
     while(true)
     {
         try
@@ -1722,17 +1731,17 @@ void NucInstDig::pollerThread1()
                     }
                     else
                     {
-                        std::cerr << "pollerThread1: invalid type " << p->type << " for " << p->name << std::endl;
+                        std::cerr << message_prefix << "invalid type " << p->type << " for " << p->name << std::endl;
                     }
                 }
                 catch(const std::exception& ex)
                 {
-                    std::cerr << "pollerThread1: exception " << ex.what() << " for parameter " << p->name << " channel " << p->chan << std::endl;
+                    std::cerr << message_prefix << "exception " << ex.what() << " for parameter " << p->name << " channel " << p->chan << std::endl;
                     epicsThreadSleep(1.0);
                 }
                 catch(...)
                 {
-                    std::cerr << "pollerThread1: exception for parameter " << p->name << " channel " << p->chan << std::endl;
+                    std::cerr << message_prefix <<  "exception for parameter " << p->name << " channel " << p->chan << std::endl;
                     epicsThreadSleep(1.0);
                 }
             }
@@ -1740,12 +1749,12 @@ void NucInstDig::pollerThread1()
         }
         catch(const std::exception& ex)
         {
-            std::cerr << "pollerThread1: exception " << ex.what() << std::endl;
+            std::cerr << message_prefix << "exception " << ex.what() << std::endl;
             epicsThreadSleep(3.0);
         }
         catch(...)
         {
-            std::cerr << "pollerThread1: exception " << std::endl;
+            std::cerr << message_prefix << "exception " << std::endl;
             epicsThreadSleep(3.0);
         }
         epicsThreadSleep(3.0);
